@@ -188,7 +188,8 @@ function TodayTab() {
       )}
       {showReminderEditor && (
         <EventEditor
-          event={editingReminder ? { ...editingReminder, isReminder: true } : { isReminder: true }}
+          event={editingReminder ? { ...editingReminder, isReminder: true } : null}
+          defaultIsReminder={true}
           people={people}
           onSave={ev => { const r = { ...ev, text: ev.title }; editingReminder ? updateReminder(r) : addReminder(r); setShowReminderEditor(false); }}
           onDelete={id => { removeReminder(id); setShowReminderEditor(false); }}

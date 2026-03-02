@@ -127,44 +127,44 @@ function TimePicker({ value, onChange }) {
     emit(hour, min, per);
   };
 
-  const inputStyle = {
-    flex: 1, border: `1.5px solid ${p.warm}`, borderRadius: 10,
-    padding: "12px 0", fontSize: 22, fontWeight: 700,
+  const fieldStyle = {
+    flex: 1, minWidth: 0, border: `1.5px solid ${p.warm}`, borderRadius: 10,
+    padding: "10px 4px", fontSize: 18, fontWeight: 700,
     color: p.text, background: p.white, outline: "none",
-    fontFamily: "inherit", textAlign: "center",
+    fontFamily: "inherit", textAlign: "center", width: "100%",
   };
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 4, width: "100%", minWidth: 0 }}>
       <input
         type="text" inputMode="numeric"
         value={hour}
         placeholder="–"
         onChange={e => handleHourChange(e.target.value)}
-        style={inputStyle}
+        style={fieldStyle}
       />
-      <span style={{ fontSize: 24, fontWeight: 700, color: p.muted }}>:</span>
+      <span style={{ fontSize: 20, fontWeight: 700, color: p.muted, flexShrink: 0 }}>:</span>
       <select
         value={min}
         onChange={e => handleMinChange(e.target.value)}
-        style={{ ...inputStyle, cursor: "pointer" }}
+        style={{ ...fieldStyle, cursor: "pointer" }}
       >
         {["00","05","10","15","20","25","30","35","40","45","50","55"].map(m => (
           <option key={m} value={m}>{m}</option>
         ))}
       </select>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
         {["AM", "PM"].map(per => (
           <button
             key={per}
             type="button"
             onClick={() => handlePeriod(per)}
             style={{
-              padding: "7px 14px", borderRadius: 8, fontSize: 15, fontWeight: 700,
+              padding: "10px 10px", borderRadius: 8, fontSize: 14, fontWeight: 700,
               border: `1.5px solid ${period === per ? p.accent : p.warm}`,
               background: period === per ? p.accent : p.white,
               color: period === per ? p.white : p.muted,
-              cursor: "pointer", fontFamily: "inherit",
+              cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
             }}
           >{per}</button>
         ))}
@@ -300,7 +300,7 @@ function NotificationPicker({ notifyDate, notifyTime, onDateChange, onTimeChange
   };
 
   return (
-    <div style={{ background: "#F0F5FF", borderRadius: 14, padding: 16, border: "1px solid #C0D0F0", marginBottom: 14 }}>
+    <div style={{ background: "#F0F5FF", borderRadius: 14, padding: 16, border: "1px solid #C0D0F0", marginBottom: 14, overflow: "hidden", boxSizing: "border-box" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <span style={{ fontSize: 20 }}>🔔</span>
         <div style={{ fontSize: 15, fontWeight: 700, color: "#1A3A80" }}>Remind me</div>
@@ -355,14 +355,14 @@ function NotificationPicker({ notifyDate, notifyTime, onDateChange, onTimeChange
 }
 
 // ─── Main EventEditor ─────────────────────────────────────────────────────────
-export default function EventEditor({ event, people, onSave, onDelete, onClose }) {
+export default function EventEditor({ event, people, onSave, onDelete, onClose, defaultIsReminder = false }) {
   const isNew = !event;
   const [form, setForm] = useState(event || {
     id: uid(), emoji: "📅", title: "", sub: "",
     time: "", day: new Date().toISOString(),
     dropoffBy: "", dropoffTime: "",
     pickupBy: "", pickupTime: "",
-    isReminder: false, urgent: false,
+    isReminder: defaultIsReminder, urgent: false,
     notifyDate: "", notifyTime: "",
   });
 
@@ -449,10 +449,6 @@ export default function EventEditor({ event, people, onSave, onDelete, onClose }
           {!form.isReminder && (
             <>
               <DayPicker value={form.day} onChange={v => set("day", v)} />
-              <div style={{ marginBottom: 18 }}>
-                <div style={lbl}>Start time</div>
-                <TimePicker value={form.time} onChange={v => set("time", v)} />
-              </div>
               <div style={{ background: "#FFF5F0", borderRadius: 14, padding: 16, border: "1px solid #FFD5C0", marginBottom: 14 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: "#8C3A00", marginBottom: 14 }}>🚗 Drop-off</div>
                 <div style={{ marginBottom: 14 }}>
