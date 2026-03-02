@@ -15,6 +15,14 @@ const p = {
   text: "#2A1F1A", muted: "#8C7B72", white: "#FFFFFF",
 };
 
+// iOS uses & to separate number/body; Android uses ?
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const smsLink = (phone, body) => {
+  const sep = isIOS ? "&" : "?";
+  const clean = phone.replace(/\D/g, "");
+  return `sms:${clean}${sep}body=${encodeURIComponent(body)}`;
+};
+
 // ─── Today Tab ────────────────────────────────────────────────────────────────
 function TodayTab() {
   const { family, addEvent, updateEvent, removeEvent, addReminder, updateReminder, removeReminder } = useApp();
@@ -35,7 +43,7 @@ function TodayTab() {
     const phone = family.coParent.phone;
     const text = `Hi ${family.coParent.name}! Here's today's schedule:\n${family.schedule.map(e => `• ${e.time || ""} ${e.title}`).join("\n")}`;
     if (phone) {
-      window.open(`sms:${phone}&body=${encodeURIComponent(text)}`, "_blank");
+      window.open(smsLink(phone, text), "_blank");
     }
     setSendLoading(false);
     setSendDone(true);
@@ -86,7 +94,7 @@ function TodayTab() {
       {/* Schedule */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20, marginBottom: 10 }}>
         <div style={s.sectionLabel}>Today's Schedule</div>
-        <button onClick={() => { setEditingEvent(null); setShowEventEditor(true); }} style={s.addBtn}>+ Add</button>
+        <button onClick={() => { setEditingEvent(null); setShowEventEditor(true); }} style={s.addBtn}>＋ Add event</button>
       </div>
 
       {todaySchedule.length === 0 && (
@@ -125,7 +133,7 @@ function TodayTab() {
       {/* Reminders */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20, marginBottom: 10 }}>
         <div style={s.sectionLabel}>Reminders</div>
-        <button onClick={() => { setEditingReminder(null); setShowReminderEditor(true); }} style={s.addBtn}>+ Add</button>
+        <button onClick={() => { setEditingReminder(null); setShowReminderEditor(true); }} style={s.addBtn}>＋ Add reminder</button>
       </div>
 
       {reminders.filter(r => !r.urgent).map(r => (
@@ -274,7 +282,7 @@ function ShareTab() {
   const send = () => {
     const phone = family.coParent.phone || "";
     const encoded = encodeURIComponent(generated || "");
-    window.open(`sms:${phone}&body=${encoded}`, "_blank");
+    window.open(smsLink(phone, encoded), "_blank");
     addSentMessage({ preview: generated });
     setSent(true);
     setTimeout(() => setSent(false), 3000);
@@ -481,7 +489,7 @@ const s = {
   sendStrip: { background: "#C8E6D0", border: "1px solid #7BAF8E", borderRadius: 16, padding: "14px 16px", marginBottom: 4, display: "flex", alignItems: "center", gap: 12 },
   sendBtn: { background: "#E8825A", border: "none", color: "#fff", padding: "8px 16px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer" },
   sectionLabel: { fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "#8C7B72" },
-  addBtn: { fontSize: 13, fontWeight: 600, color: "#E8825A", background: "none", border: "none", cursor: "pointer", padding: "4px 0" },
+  addBtn: { fontSize: 13, fontWeight: 600, color: "#E8825A", background: "#FEF0E8", border: "1.5px solid #F2C4A8", borderRadius: 20, cursor: "pointer", padding: "6px 14px", display: "flex", alignItems: "center", gap: 4 },
   card: { background: "#fff", borderRadius: 16, padding: 16, marginBottom: 10, border: "1px solid #F5EDE0", cursor: "pointer" },
   cardRow: { display: "flex", alignItems: "center", gap: 12 },
   timeDot: { width: 40, height: 40, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 },
