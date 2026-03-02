@@ -504,11 +504,11 @@ export default function EventEditor({ event, people, onSave, onDelete, onClose, 
             {isNew ? (form.isReminder ? "Add reminder" : "Add to schedule") : "Save changes"}
           </button>
           {!isNew && (
-            <button type="button" onClick={() => { if (window.confirm("Remove this item?")) onDelete(event.id); }} style={{
-              width: "100%", background: "transparent", color: p.red,
-              border: `1.5px solid ${p.redLight}`, borderRadius: 12, padding: "13px",
+            <button type="button" onClick={() => onDelete(event.id)} style={{
+              width: "100%", background: "transparent", color: p.muted,
+              border: `1.5px solid ${p.warm}`, borderRadius: 12, padding: "13px",
               fontSize: 15, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
-            }}>Remove</button>
+            }}>🗂️ Archive</button>
           )}
         </div>
       </div>

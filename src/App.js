@@ -44,13 +44,14 @@ if (typeof window !== "undefined") {
 
 // ─── Today Tab ────────────────────────────────────────────────────────────────
 function TodayTab() {
-  const { family, addEvent, updateEvent, removeEvent, addReminder, updateReminder, removeReminder, fmt } = useApp();
+  const { family, addEvent, updateEvent, removeEvent, addReminder, updateReminder, removeReminder, archiveEvent, archiveReminder, unarchiveEvent, unarchiveReminder, fmt } = useApp();
   const [showEventEditor, setShowEventEditor] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const [showReminderEditor, setShowReminderEditor] = useState(false);
   const [editingReminder, setEditingReminder] = useState(null);
   const [sendLoading, setSendLoading] = useState(false);
   const [sendDone, setSendDone] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const people = [family.primaryParent.name, family.coParent.name];
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
@@ -115,8 +116,11 @@ function TodayTab() {
     setTimeout(() => setSendDone(false), 3000);
   };
 
-  const schedule = (family.schedule || []).filter(e => !e.isReminder);
-  const reminders = family.reminders || [];
+  const schedule = (family.schedule || []).filter(e => !e.isReminder && !e.archived);
+  const reminders = (family.reminders || []).filter(r => !r.archived);
+  const archivedEvents = (family.schedule || []).filter(e => !e.isReminder && e.archived);
+  const archivedReminders = (family.reminders || []).filter(r => r.archived);
+  const totalArchived = archivedEvents.length + archivedReminders.length;
 
   const emojiColors = {
     "🏊": p.blueSoft, "💊": p.purpleSoft, "⚽": p.greenSoft,
@@ -175,7 +179,7 @@ function TodayTab() {
           <SwipeableCard
             key={item.id}
             hintDelay={hintDelay}
-            onDelete={() => removeEvent(item.id)}
+            onDelete={() => archiveEvent(item.id)}
             onTap={() => { setEditingEvent(item); setShowEventEditor(true); }}
             style={s.card}
           >
@@ -207,7 +211,7 @@ function TodayTab() {
         <SwipeableCard
           key={r.id}
           hintDelay={idx === 0 && reminders.filter(x => !x.urgent).length > 0 ? 3500 : 0}
-          onDelete={() => removeReminder(r.id)}
+          onDelete={() => archiveReminder(r.id)}
           onTap={() => { setEditingReminder({ ...r, isReminder: true }); setShowReminderEditor(true); }}
           style={s.card}
         >
@@ -230,10 +234,45 @@ function TodayTab() {
       ))}
       {reminders.length === 0 && <div style={{ ...s.emptyState, padding: "18px" }}><div style={{ fontSize: 15, color: p.muted }}>No reminders yet</div></div>}
 
+      {/* Archive toggle */}
+      {totalArchived > 0 && (
+        <button onClick={() => setShowArchived(v => !v)} style={{
+          width: "100%", marginTop: 8, padding: "12px", borderRadius: 12,
+          border: `1.5px solid ${p.warm}`, background: showArchived ? p.warm : "transparent",
+          color: p.muted, fontSize: 14, fontWeight: 500, cursor: "pointer",
+          fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+        }}>
+          <span>🗂️</span>
+          <span>{showArchived ? "Hide" : "Show"} archive ({totalArchived})</span>
+        </button>
+      )}
+
+      {/* Archived items */}
+      {showArchived && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ ...s.sectionLabel, marginBottom: 12, opacity: 0.6 }}>Archived</div>
+          {[...archivedEvents, ...archivedReminders].map(item => (
+            <div key={item.id} style={{ ...s.card, opacity: 0.6, marginBottom: 8 }}>
+              <div style={s.cardRow}>
+                <div style={{ ...s.timeDot, background: p.warm }}>{item.emoji || "📋"}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ ...s.cardTitle, fontWeight: 400, textDecoration: "line-through" }}>{item.title || item.text}</div>
+                  {item.sub && <div style={s.cardSub}>{item.sub}</div>}
+                </div>
+                <button onClick={() => item.isReminder ? unarchiveReminder(item.id) : unarchiveEvent(item.id)}
+                  style={{ background: p.warm, border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: p.muted, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+                  Restore
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {showEventEditor && (
         <EventEditor event={editingEvent} people={people}
           onSave={ev => { editingEvent ? updateEvent(ev) : addEvent(ev); setShowEventEditor(false); }}
-          onDelete={id => { removeEvent(id); setShowEventEditor(false); }}
+          onDelete={id => { archiveEvent(id); setShowEventEditor(false); }}
           onClose={() => setShowEventEditor(false)} />
       )}
       {showReminderEditor && (
@@ -242,7 +281,7 @@ function TodayTab() {
           defaultIsReminder={true}
           people={people}
           onSave={ev => { const r = { ...ev, text: ev.title }; editingReminder ? updateReminder(r) : addReminder(r); setShowReminderEditor(false); }}
-          onDelete={id => { removeReminder(id); setShowReminderEditor(false); }}
+          onDelete={id => { archiveReminder(id); setShowReminderEditor(false); }}
           onClose={() => setShowReminderEditor(false)} />
       )}
     </div>

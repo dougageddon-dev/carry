@@ -85,6 +85,20 @@ export function AppProvider({ children }) {
     setFamily(f => ({ ...f, reminders: f.reminders.filter(r => r.id !== reminderId) }));
   }, [setFamily]);
 
+  // Archive (soft delete)
+  const archiveEvent = useCallback((eventId) => {
+    setFamily(f => ({ ...f, schedule: f.schedule.map(e => e.id === eventId ? { ...e, archived: true } : e) }));
+  }, [setFamily]);
+  const unarchiveEvent = useCallback((eventId) => {
+    setFamily(f => ({ ...f, schedule: f.schedule.map(e => e.id === eventId ? { ...e, archived: false } : e) }));
+  }, [setFamily]);
+  const archiveReminder = useCallback((reminderId) => {
+    setFamily(f => ({ ...f, reminders: f.reminders.map(r => r.id === reminderId ? { ...r, archived: true } : r) }));
+  }, [setFamily]);
+  const unarchiveReminder = useCallback((reminderId) => {
+    setFamily(f => ({ ...f, reminders: f.reminders.map(r => r.id === reminderId ? { ...r, archived: false } : r) }));
+  }, [setFamily]);
+
   // Sent messages
   const addSentMessage = useCallback((msg) => {
     const date = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -113,6 +127,7 @@ Reminders: ${(family.reminders || []).map(r => r.text).join(", ") || "None"}`;
       addKid, updateKid, removeKid,
       addEvent, updateEvent, removeEvent,
       addReminder, updateReminder, removeReminder,
+      archiveEvent, unarchiveEvent, archiveReminder, unarchiveReminder,
       addSentMessage, getFamilyContext,
     }}>
       {children}

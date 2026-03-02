@@ -5,7 +5,7 @@ const SWIPE_THRESHOLD = 60;   // px to reveal delete
 const DELETE_THRESHOLD = 140; // px to auto-delete
 const DELETE_BTN_WIDTH = 72;
 
-export default function SwipeableCard({ children, onDelete, onTap, style, hintDelay = 0 }) {
+export default function SwipeableCard({ children, onDelete, onTap, style, hintDelay = 0, archiveMode = true }) {
   const [offset, setOffset] = useState(0);          // current translateX
   const [revealed, setRevealed] = useState(false);  // delete button showing
   const [deleting, setDeleting] = useState(false);
@@ -133,15 +133,15 @@ export default function SwipeableCard({ children, onDelete, onTap, style, hintDe
       <div style={{
         position: "absolute", right: 0, top: 0, bottom: 0,
         width: DELETE_BTN_WIDTH,
-        background: "#E74C3C",
+        background: archiveMode ? "#7BAF8E" : "#E74C3C",
         display: "flex", alignItems: "center", justifyContent: "center",
         borderRadius: "0 16px 16px 0",
         cursor: "pointer",
         opacity: Math.min(1, Math.abs(offset) / DELETE_BTN_WIDTH),
       }} onClick={() => { setDeleting(true); setTimeout(() => onDelete(), 200); }}>
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 22 }}>🗑️</div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#fff", marginTop: 2 }}>Delete</div>
+          <div style={{ fontSize: 22 }}>{archiveMode ? "🗂️" : "🗑️"}</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#fff", marginTop: 2 }}>{archiveMode ? "Archive" : "Delete"}</div>
         </div>
       </div>
 

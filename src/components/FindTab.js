@@ -37,25 +37,34 @@ async function geocodeCity(city) {
   return null;
 }
 
-// Search Places with location bias — results pinned to the city area
+// Search Places — uses Nearby Search (strict radius) when we have coords,
+// falls back to Text Search (soft bias) otherwise.
 async function searchPlaces(query, city, coords, radiusKm = 15) {
-  const params = {
-    query: query,   // just the activity — city is enforced via lat/lng
-    radius: radiusKm * 1000,
-  };
+  const radiusM = radiusKm * 1000;
 
-  // If we have coordinates, bias hard to that location
+  let action, params;
+
   if (coords?.lat && coords?.lng) {
-    params.location = `${coords.lat},${coords.lng}`;
+    // Nearby Search enforces the radius hard — results MUST be within it
+    action = "nearbysearch";
+    params = {
+      location: `${coords.lat},${coords.lng}`,
+      radius: radiusM,
+      keyword: query,
+    };
   } else {
-    // Fallback: include city in text query
-    params.query = `${query} ${city}`;
+    // No coords yet — fall back to text search with city appended
+    action = "textsearch";
+    params = {
+      query: `${query} ${city}`,
+      radius: radiusM,
+    };
   }
 
   const res = await fetch("/api/places", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "textsearch", params }),
+    body: JSON.stringify({ action, params }),
   });
   if (!res.ok) {
     const text = await res.text();
@@ -123,6 +132,20 @@ export default function FindTab() {
   const [radiusKm, setRadiusKm] = useState(15);
   const city = family?.location?.city || "Victoria, BC";
   const kids = family?.kids || [];
+
+  // Geocode city on mount whenever city changes
+  useEffect(() => {
+    if (city) {
+      geocodeCity(city).then(c => {
+        if (c) {
+          console.log("Geocoded", city, "→", c);
+          setCoords(c);
+        } else {
+          console.warn("Geocoding failed for:", city);
+        }
+      });
+    }
+  }, [city]);
 
   const handleSearch = async (overrideFilter) => {
     const activeFilter = overrideFilter ?? filter;
@@ -232,10 +255,21 @@ export default function FindTab() {
         {loading ? "Searching…" : `🔍 Search near ${city}`}
       </button>
 
-      {/* Context line */}
-      {!loading && !results.length && !error && (
-        <div style={{ fontSize: 14, color: pal.muted, marginBottom: 16 }}>
-          {city}{kids.length ? ` · Ages ${kids.map(k => k.age).join(" & ")}` : ""}
+      {/* Context line + location debug */}
+      {!loading && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 14, color: pal.muted }}>
+            📍 {city}{kids.length ? ` · Ages ${kids.map(k => k.age).join(" & ")}` : ""}
+          </div>
+          {coords ? (
+            <div style={{ fontSize: 12, color: "#7BAF8E", marginTop: 3 }}>
+              ✅ Location locked: {coords.lat.toFixed(3)}, {coords.lng.toFixed(3)}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: "#E8825A", marginTop: 3 }}>
+              ⚠️ Resolving location… update your city in Settings if results look wrong
+            </div>
+          )}
         </div>
       )}
 
