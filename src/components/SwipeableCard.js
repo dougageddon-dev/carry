@@ -1,164 +1,145 @@
 // src/components/SwipeableCard.js
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const SWIPE_THRESHOLD = 60;   // px to reveal delete
-const DELETE_THRESHOLD = 140; // px to auto-delete
-const DELETE_BTN_WIDTH = 72;
+const REVEAL_THRESHOLD = 55;
+const DELETE_THRESHOLD = 130;
+const BTN_WIDTH = 76;
 
-export default function SwipeableCard({ children, onDelete, onTap, style, hintDelay = 0, archiveMode = true }) {
-  const [offset, setOffset] = useState(0);          // current translateX
-  const [revealed, setRevealed] = useState(false);  // delete button showing
-  const [deleting, setDeleting] = useState(false);
-  const startX = useRef(null);
-  const startY = useRef(null);
-  const isDragging = useRef(false);
-  const isScrolling = useRef(false);
-  const cardRef = useRef(null);
+export default function SwipeableCard({
+  children, onDelete, onTap, style,
+  hintDelay = 0, archiveMode = true,
+}) {
+  const [offset, setOffset] = useState(0);
+  const [snapped, setSnapped] = useState(false);
+  const [animating, setAnimating] = useState(true);
+  const [exiting, setExiting] = useState(false);
 
-  // ── Hint animation: briefly slide left then snap back ────────────────────
+  const touchStartX = useRef(null);
+  const touchStartY = useRef(null);
+  const didDrag = useRef(false);
+  const isScrollGesture = useRef(false);
+  const offsetRef = useRef(0); // track offset without re-render lag
+  const snappedRef = useRef(false);
+
+  // keep refs in sync
+  useEffect(() => { offsetRef.current = offset; }, [offset]);
+  useEffect(() => { snappedRef.current = snapped; }, [snapped]);
+
+  // Hint animation
   useEffect(() => {
-    if (hintDelay <= 0) return;
-    const timer = setTimeout(() => {
-      setOffset(-30);
-      const snap = setTimeout(() => setOffset(0), 400);
-      return () => clearTimeout(snap);
+    if (!hintDelay) return;
+    const t = setTimeout(() => {
+      setAnimating(true);
+      setOffset(-28);
+      const t2 = setTimeout(() => setOffset(0), 420);
+      return () => clearTimeout(t2);
     }, hintDelay);
-    return () => clearTimeout(timer);
+    return () => clearTimeout(t);
   }, [hintDelay]);
 
-  const snapBack = useCallback(() => {
-    setOffset(0);
-    setRevealed(false);
+  const snapClose = useCallback(() => {
+    setAnimating(true); setOffset(0); setSnapped(false);
   }, []);
 
   const snapOpen = useCallback(() => {
-    setOffset(-DELETE_BTN_WIDTH);
-    setRevealed(true);
+    setAnimating(true); setOffset(-BTN_WIDTH); setSnapped(true);
   }, []);
 
-  // Touch handlers
-  const onTouchStart = (e) => {
-    if (deleting) return;
-    startX.current = e.touches[0].clientX;
-    startY.current = e.touches[0].clientY;
-    isDragging.current = false;
-    isScrolling.current = false;
-  };
+  const doArchive = useCallback(() => {
+    setAnimating(true); setExiting(true); setOffset(-400);
+    setTimeout(() => onDelete(), 260);
+  }, [onDelete]);
 
-  const onTouchMove = (e) => {
-    if (isScrolling.current) return;
-    const dx = e.touches[0].clientX - startX.current;
-    const dy = e.touches[0].clientY - startY.current;
+  const onTouchStart = useCallback((e) => {
+    if (exiting) return;
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    didDrag.current = false;
+    isScrollGesture.current = false;
+    setAnimating(false);
+  }, [exiting]);
 
-    // If moving more vertically than horizontally on first move, treat as scroll
-    if (!isDragging.current && Math.abs(dy) > Math.abs(dx)) {
-      isScrolling.current = true;
+  const onTouchMove = useCallback((e) => {
+    if (exiting || isScrollGesture.current) return;
+    const dx = e.touches[0].clientX - touchStartX.current;
+    const dy = e.touches[0].clientY - touchStartY.current;
+
+    // Determine intent on first real movement
+    if (!didDrag.current) {
+      if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+      if (Math.abs(dy) >= Math.abs(dx)) {
+        isScrollGesture.current = true;
+        setAnimating(true);
+        return;
+      }
+      didDrag.current = true;
+    }
+
+    e.preventDefault();
+    const base = snappedRef.current ? -BTN_WIDTH : 0;
+    const next = Math.min(6, Math.max(-200, base + dx));
+    setOffset(next);
+  }, [exiting]);
+
+  const onTouchEnd = useCallback(() => {
+    if (exiting) return;
+    setAnimating(true);
+
+    if (isScrollGesture.current || !didDrag.current) {
+      // Was a tap or a scroll — don't snap
+      if (!isScrollGesture.current) {
+        if (snappedRef.current) snapClose();
+        else onTap?.();
+      }
       return;
     }
 
-    // Only left-swipe
-    if (dx > 0 && !revealed) return;
-    isDragging.current = true;
-    e.preventDefault();
+    const cur = offsetRef.current;
+    if (cur < -DELETE_THRESHOLD) doArchive();
+    else if (cur < -REVEAL_THRESHOLD) snapOpen();
+    else snapClose();
 
-    const base = revealed ? -DELETE_BTN_WIDTH : 0;
-    const next = Math.min(0, Math.max(-180, base + dx));
-    setOffset(next);
-  };
+    didDrag.current = false;
+  }, [exiting, snapClose, snapOpen, doArchive, onTap]);
 
-  const onTouchEnd = () => {
-    if (isScrolling.current || !isDragging.current) return;
-
-    if (offset < -DELETE_THRESHOLD) {
-      // Swipe far enough → delete
-      setDeleting(true);
-      setOffset(-400);
-      setTimeout(() => onDelete(), 280);
-    } else if (offset < -SWIPE_THRESHOLD) {
-      snapOpen();
-    } else {
-      snapBack();
-    }
-    isDragging.current = false;
-  };
-
-  // Mouse handlers for desktop testing
-  const onMouseDown = (e) => {
-    if (deleting) return;
-    startX.current = e.clientX;
-    isDragging.current = false;
-  };
-  const onMouseMove = useCallback((e) => {
-    if (startX.current === null) return;
-    const dx = e.clientX - startX.current;
-    if (dx > 0 && !revealed) return;
-    if (Math.abs(dx) > 5) isDragging.current = true;
-    if (!isDragging.current) return;
-    const base = revealed ? -DELETE_BTN_WIDTH : 0;
-    setOffset(Math.min(0, Math.max(-180, base + dx)));
-  }, [revealed]);
-  const onMouseUp = useCallback(() => {
-    if (!isDragging.current) return;
-    if (offset < -DELETE_THRESHOLD) {
-      setDeleting(true);
-      setOffset(-400);
-      setTimeout(() => onDelete(), 280);
-    } else if (offset < -SWIPE_THRESHOLD) {
-      snapOpen();
-    } else {
-      snapBack();
-    }
-    startX.current = null;
-    isDragging.current = false;
-  }, [offset, onDelete, snapOpen, snapBack]);
-
-  useEffect(() => {
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-    return () => {
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-    };
-  }, [onMouseMove, onMouseUp]);
-
-  const handleTap = () => {
-    if (isDragging.current) return;
-    if (revealed) { snapBack(); return; }
-    onTap && onTap();
-  };
+  const color = archiveMode ? "#5A9E72" : "#C0392B";
+  const btnOpacity = Math.min(1, Math.abs(offset) / (BTN_WIDTH * 0.6));
 
   return (
     <div style={{ position: "relative", overflow: "hidden", borderRadius: 16, marginBottom: 10 }}>
-      {/* Delete button revealed behind */}
-      <div style={{
-        position: "absolute", right: 0, top: 0, bottom: 0,
-        width: DELETE_BTN_WIDTH,
-        background: archiveMode ? "#7BAF8E" : "#E74C3C",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        borderRadius: "0 16px 16px 0",
-        cursor: "pointer",
-        opacity: Math.min(1, Math.abs(offset) / DELETE_BTN_WIDTH),
-      }} onClick={() => { setDeleting(true); setTimeout(() => onDelete(), 200); }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 22 }}>{archiveMode ? "🗂️" : "🗑️"}</div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#fff", marginTop: 2 }}>{archiveMode ? "Archive" : "Delete"}</div>
-        </div>
+      {/* Archive/delete button */}
+      <div onClick={doArchive} style={{
+        position: "absolute", right: 0, top: 0, bottom: 0, width: BTN_WIDTH,
+        background: color, display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", gap: 3,
+        borderRadius: "0 16px 16px 0", cursor: "pointer", opacity: btnOpacity,
+      }}>
+        <span style={{ fontSize: 22 }}>{archiveMode ? "🗂️" : "🗑️"}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>
+          {archiveMode ? "Archive" : "Delete"}
+        </span>
       </div>
 
-      {/* Card itself */}
+      {/* Card */}
       <div
-        ref={cardRef}
-        style={{
-          transform: `translateX(${offset}px)`,
-          transition: isDragging.current ? "none" : "transform 0.28s cubic-bezier(0.25,0.46,0.45,0.94)",
-          opacity: deleting ? 0 : 1,
-          ...style,
-        }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
-        onMouseDown={onMouseDown}
-        onClick={handleTap}
+        onTouchCancel={onTouchEnd}
+        onClick={() => {
+          if (!didDrag.current) {
+            if (snappedRef.current) snapClose();
+            else onTap?.();
+          }
+        }}
+        style={{
+          transform: `translateX(${offset}px)`,
+          transition: animating ? "transform 0.26s cubic-bezier(0.25,0.46,0.45,0.94)" : "none",
+          opacity: exiting ? 0 : 1,
+          willChange: "transform",
+          touchAction: "pan-y", // allow vertical scroll, intercept horizontal in JS
+          ...style,
+        }}
       >
         {children}
       </div>
