@@ -1,6 +1,6 @@
 // src/components/FindTab.js
 import { useState, useRef, useEffect } from "react";
-import { smartCampSearch, placesTextSearch } from "../lib/api";
+import { smartCampSearch } from "../lib/api";
 import { useApp } from "../lib/AppContext";
 import { useGoogleMaps } from "../hooks/useGoogleMaps";
 
