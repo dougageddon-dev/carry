@@ -1,6 +1,4 @@
 // netlify/functions/places.js
-// Proxies Google Places API requests to keep API key server-side
-
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method Not Allowed" };
@@ -10,37 +8,40 @@ exports.handler = async (event) => {
   if (!apiKey) {
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Google Places API key not configured" }),
+      body: JSON.stringify({ error: "GOOGLE_PLACES_API_KEY environment variable is not set" }),
     };
   }
 
+  let body;
   try {
-    const { action, params } = JSON.parse(event.body);
+    body = JSON.parse(event.body);
+  } catch {
+    return { statusCode: 400, body: JSON.stringify({ error: "Invalid JSON body" }) };
+  }
 
+  const { action, params } = body;
+
+  try {
     let url;
-    let queryParams = new URLSearchParams({ key: apiKey });
+    const queryParams = new URLSearchParams({ key: apiKey });
 
     if (action === "textsearch") {
-      // Search businesses by text query
       url = "https://maps.googleapis.com/maps/api/place/textsearch/json";
       queryParams.set("query", params.query);
       if (params.location) queryParams.set("location", params.location);
-      if (params.radius) queryParams.set("radius", params.radius || 10000);
+      if (params.radius) queryParams.set("radius", String(params.radius));
       if (params.type) queryParams.set("type", params.type);
     } else if (action === "nearbysearch") {
-      // Search nearby places
       url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json";
       queryParams.set("location", params.location);
-      queryParams.set("radius", params.radius || 5000);
+      queryParams.set("radius", String(params.radius || 5000));
       if (params.keyword) queryParams.set("keyword", params.keyword);
       if (params.type) queryParams.set("type", params.type);
     } else if (action === "details") {
-      // Get place details
       url = "https://maps.googleapis.com/maps/api/place/details/json";
       queryParams.set("place_id", params.place_id);
-      queryParams.set("fields", params.fields || "name,formatted_address,formatted_phone_number,website,opening_hours,rating,reviews");
+      queryParams.set("fields", params.fields || "name,formatted_address,formatted_phone_number,website,opening_hours,rating,user_ratings_total,price_level,types");
     } else if (action === "autocomplete") {
-      // Autocomplete for address search
       url = "https://maps.googleapis.com/maps/api/place/autocomplete/json";
       queryParams.set("input", params.input);
       if (params.types) queryParams.set("types", params.types);
@@ -54,16 +55,17 @@ exports.handler = async (event) => {
     const response = await fetch(`${url}?${queryParams.toString()}`);
     const data = await response.json();
 
+    // Pass Google's response through directly (includes status, results, error_message)
     return {
       statusCode: 200,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ success: true, ...data }),
+      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      body: JSON.stringify(data),
     };
   } catch (err) {
-    console.error("Places API error:", err);
+    console.error("Places function error:", err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ success: false, error: err.message }),
+      body: JSON.stringify({ error: err.message }),
     };
   }
 };
