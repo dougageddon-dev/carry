@@ -21,17 +21,41 @@ const pal = {
   text: "#2A1F1A", muted: "#8C7B72", white: "#FFFFFF",
 };
 
-async function searchPlaces(query, city) {
+// Geocode a city string → { lat, lng } using Google Geocoding via our places proxy
+async function geocodeCity(city) {
   const res = await fetch("/api/places", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      action: "textsearch",
-      params: {
-        query: `${query} ${city}`,
-        radius: 15000,
-      },
-    }),
+    body: JSON.stringify({ action: "geocode", params: { address: city } }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (data.status === "OK" && data.results?.[0]) {
+    const loc = data.results[0].geometry.location;
+    return { lat: loc.lat, lng: loc.lng };
+  }
+  return null;
+}
+
+// Search Places with location bias — results pinned to the city area
+async function searchPlaces(query, city, coords, radiusKm = 15) {
+  const params = {
+    query: query,   // just the activity — city is enforced via lat/lng
+    radius: radiusKm * 1000,
+  };
+
+  // If we have coordinates, bias hard to that location
+  if (coords?.lat && coords?.lng) {
+    params.location = `${coords.lat},${coords.lng}`;
+  } else {
+    // Fallback: include city in text query
+    params.query = `${query} ${city}`;
+  }
+
+  const res = await fetch("/api/places", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "textsearch", params }),
   });
   if (!res.ok) {
     const text = await res.text();
@@ -42,6 +66,26 @@ async function searchPlaces(query, city) {
     throw new Error(`Google Places: ${data.status} — ${data.error_message || ""}`);
   }
   return data.results || [];
+}
+
+// Fetch phone + website for a single place
+async function fetchPlaceDetails(place_id) {
+  try {
+    const res = await fetch("/api/places", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "details",
+        params: {
+          place_id,
+          fields: "formatted_phone_number,website,international_phone_number",
+        },
+      }),
+    });
+    if (!res.ok) return {};
+    const data = await res.json();
+    return data.result || {};
+  } catch { return {}; }
 }
 
 const PRICE_LABELS = ["", "$", "$$", "$$$", "$$$$"];
@@ -69,7 +113,14 @@ export default function FindTab() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState(null);
+  const [details, setDetails] = useState({}); // place_id → { phone, website }
   const [saved, setSaved] = useState([]);
+  const [coords, setCoords] = useState(
+    family?.location?.lat && family?.location?.lng
+      ? { lat: family.location.lat, lng: family.location.lng }
+      : null
+  );
+  const [radiusKm, setRadiusKm] = useState(15);
   const city = family?.location?.city || "Victoria, BC";
   const kids = family?.kids || [];
 
@@ -81,7 +132,14 @@ export default function FindTab() {
     setResults([]);
 
     try {
-      const places = await searchPlaces(baseQuery, city);
+      // Geocode city if we don't have coords yet
+      let searchCoords = coords;
+      if (!searchCoords) {
+        searchCoords = await geocodeCity(city);
+        if (searchCoords) setCoords(searchCoords);
+      }
+
+      const places = await searchPlaces(baseQuery, city, searchCoords, radiusKm);
       setResults(places);
     } catch (err) {
       console.error("Search error:", err);
@@ -135,9 +193,25 @@ export default function FindTab() {
         ))}
       </div>
 
+      {/* Radius picker */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <span style={{ fontSize: 14, color: pal.muted, flexShrink: 0 }}>📍 Within</span>
+        {[5, 10, 15, 25].map(km => (
+          <button key={km}
+            onClick={() => setRadiusKm(km)}
+            style={{
+              padding: "6px 12px", borderRadius: 20, fontSize: 13, fontWeight: 500, border: "1.5px solid",
+              borderColor: radiusKm === km ? pal.accent : pal.warm,
+              background: radiusKm === km ? pal.accentSoft : "#fff",
+              color: radiusKm === km ? pal.accent : pal.muted,
+              cursor: "pointer", fontFamily: "inherit",
+            }}>{km} km</button>
+        ))}
+      </div>
+
       {/* Search button */}
       <button style={s.searchBtn} onClick={() => handleSearch()} disabled={loading}>
-        {loading ? "Searching…" : "🔍 Search near " + city}
+        {loading ? "Searching…" : `🔍 Search near ${city}`}
       </button>
 
       {/* Context line */}
@@ -182,7 +256,14 @@ export default function FindTab() {
         return (
           <div key={r.place_id || i} style={s.card}>
             {/* Card header — tappable */}
-            <div style={s.cardTop} onClick={() => setExpanded(isOpen ? null : i)}>
+            <div style={s.cardTop} onClick={async () => {
+              const next = isOpen ? null : i;
+              setExpanded(next);
+              if (next !== null && r.place_id && !details[r.place_id]) {
+                const d = await fetchPlaceDetails(r.place_id);
+                setDetails(prev => ({ ...prev, [r.place_id]: d }));
+              }
+            }}>
               <div style={{ ...s.emojiDot, background: pal.warm }}>{emoji}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={s.cardName}>{r.name}</div>
@@ -205,31 +286,69 @@ export default function FindTab() {
             </div>
 
             {/* Expanded actions */}
-            {isOpen && (
-              <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${pal.warm}` }}>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button
-                    onClick={() => toggleSave(r.place_id)}
-                    style={{ ...s.actionBtn, background: isSaved ? pal.accentSoft : pal.warm, color: isSaved ? pal.accent : pal.text }}>
-                    {isSaved ? "✓ Saved" : "♡ Save"}
-                  </button>
-                  {r.website && (
-                    <a href={r.website} target="_blank" rel="noreferrer" style={{ ...s.actionBtn, background: pal.blueSoft, color: pal.blue, textDecoration: "none" }}>
-                      🌐 Website
-                    </a>
+            {isOpen && (() => {
+              const d = details[r.place_id] || {};
+              const phone = d.formatted_phone_number || d.international_phone_number;
+              const website = d.website || r.website;
+              const isLoading = r.place_id && !details[r.place_id];
+              return (
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${pal.warm}` }}>
+                  {isLoading && (
+                    <div style={{ fontSize: 13, color: pal.muted, marginBottom: 10 }}>Loading contact info…</div>
                   )}
-                  {coParentPhone && (
-                    <button onClick={() => sendToCoParent(r)} style={{ ...s.actionBtn, background: pal.greenSoft, color: pal.green }}>
-                      📱 Send to {coParentName}
+                  {/* Contact details */}
+                  {(phone || website) && (
+                    <div style={{ marginBottom: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                      {phone && (
+                        <a href={`tel:${phone}`} style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
+                          <div style={{ width: 36, height: 36, borderRadius: 10, background: pal.greenSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>📞</div>
+                          <div>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: pal.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Phone</div>
+                            <div style={{ fontSize: 15, fontWeight: 600, color: pal.green }}>{phone}</div>
+                          </div>
+                        </a>
+                      )}
+                      {website && (
+                        <a href={website} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
+                          <div style={{ width: 36, height: 36, borderRadius: 10, background: pal.blueSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>🌐</div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: pal.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Website</div>
+                            <div style={{ fontSize: 14, fontWeight: 500, color: pal.blue, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                            </div>
+                          </div>
+                        </a>
+                      )}
+                      {!phone && !isLoading && (
+                        <div style={{ fontSize: 13, color: pal.muted, fontStyle: "italic" }}>No phone number listed</div>
+                      )}
+                    </div>
+                  )}
+                  {/* Action buttons */}
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button
+                      onClick={() => toggleSave(r.place_id)}
+                      style={{ ...s.actionBtn, background: isSaved ? pal.accentSoft : pal.warm, color: isSaved ? pal.accent : pal.text }}>
+                      {isSaved ? "✓ Saved" : "♡ Save"}
                     </button>
-                  )}
-                  <a href={`https://www.google.com/maps/place/?q=place_id:${r.place_id}`} target="_blank" rel="noreferrer"
-                    style={{ ...s.actionBtn, background: "#F0F0FF", color: "#5050C0", textDecoration: "none" }}>
-                    🗺️ Maps
-                  </a>
+                    {phone && (
+                      <a href={`tel:${phone}`} style={{ ...s.actionBtn, background: pal.greenSoft, color: pal.green, textDecoration: "none" }}>
+                        📞 Call
+                      </a>
+                    )}
+                    {coParentPhone && (
+                      <button onClick={() => sendToCoParent({ ...r, website, phone })} style={{ ...s.actionBtn, background: "#F0EEF8", color: "#6A50A0" }}>
+                        📱 Send to {coParentName}
+                      </button>
+                    )}
+                    <a href={`https://www.google.com/maps/place/?q=place_id:${r.place_id}`} target="_blank" rel="noreferrer"
+                      style={{ ...s.actionBtn, background: "#F0F0FF", color: "#5050C0", textDecoration: "none" }}>
+                      🗺️ Maps
+                    </a>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         );
       })}

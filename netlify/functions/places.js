@@ -45,6 +45,9 @@ exports.handler = async (event) => {
       url = "https://maps.googleapis.com/maps/api/place/autocomplete/json";
       queryParams.set("input", params.input);
       if (params.types) queryParams.set("types", params.types);
+    } else if (action === "geocode") {
+      url = "https://maps.googleapis.com/maps/api/geocode/json";
+      queryParams.set("address", params.address);
     } else {
       return {
         statusCode: 400,
