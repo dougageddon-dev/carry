@@ -57,9 +57,59 @@ function TodayTab() {
 
   const handleSend = async () => {
     setSendLoading(true);
-    await new Promise(r => setTimeout(r, 800));
+    await new Promise(r => setTimeout(r, 400));
     const phone = family.coParent.phone;
-    const text = `Hi ${family.coParent.name}! Here's today's schedule:\n${(family.schedule || []).map(e => `• ${fmt(e.time) || ""} ${e.title}`).join("\n")}`;
+    const coName = family.coParent.name;
+    const todayStr = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+
+    const lines = [];
+    lines.push(`Hi ${coName}! Here's the schedule for ${todayStr} 👋`);
+    lines.push("");
+
+    const todayEvents = (family.schedule || []).filter(e => !e.isReminder);
+    if (todayEvents.length === 0) {
+      lines.push("No events scheduled today.");
+    } else {
+      todayEvents.forEach(e => {
+        lines.push(`${e.emoji || "📅"} ${e.title}`);
+        if (e.dropoffTime || e.dropoffBy) {
+          const who = e.dropoffBy ? ` — ${e.dropoffBy}` : "";
+          const when = e.dropoffTime ? ` at ${fmt(e.dropoffTime)}` : "";
+          lines.push(`  🚗 Drop-off${when}${who}`);
+        }
+        if (e.pickupTime || e.pickupBy) {
+          const who = e.pickupBy ? ` — ${e.pickupBy}` : "";
+          const when = e.pickupTime ? ` at ${fmt(e.pickupTime)}` : "";
+          lines.push(`  🏁 Pick-up${when}${who}`);
+        }
+        if (e.sub) lines.push(`  📍 ${e.sub}`);
+        lines.push("");
+      });
+    }
+
+    const urgentReminders = (family.reminders || []).filter(r => r.urgent);
+    const regularReminders = (family.reminders || []);
+    if (regularReminders.length > 0) {
+      lines.push("📋 Reminders:");
+      regularReminders.forEach(r => {
+        lines.push(`  ${r.urgent ? "⚡" : "•"} ${r.text || r.title}${r.sub ? ` — ${r.sub}` : ""}`);
+      });
+      lines.push("");
+    }
+
+    if (family.kids?.some(k => k.medications?.length)) {
+      lines.push("💊 Medications today:");
+      family.kids.forEach(k => {
+        if (k.medications?.length) {
+          k.medications.forEach(m => lines.push(`  • ${k.name}: ${m}`));
+        }
+      });
+      lines.push("");
+    }
+
+    lines.push(`— ${family.primaryParent.name}`);
+
+    const text = lines.join("\n");
     if (phone) window.open(smsLink(phone, text), "_blank");
     setSendLoading(false); setSendDone(true);
     setTimeout(() => setSendDone(false), 3000);
@@ -221,7 +271,7 @@ function KidsTab() {
           <div style={s.infoGrid}>
             {[
               ["🏫 School", kid.school], ["👩‍🏫 Teacher", kid.teacher],
-              ["🏥 Doctor", kid.doctor], ["📅 Next Appt", kid.nextAppt],
+              ["📅 Next Appt", kid.nextAppt],
               ["⚠️ Allergies", kid.allergies], ["🎽 Activities", kid.activities],
             ].filter(([,v]) => v).map(([label, val]) => (
               <div key={label} style={{ ...s.infoItem, gridColumn: label.includes("Allergies")||label.includes("Activities") ? "span 2" : undefined }}>
@@ -237,6 +287,29 @@ function KidsTab() {
             </div>
           )}
           {kid.notes && <div style={s.notes}>📝 {kid.notes}</div>}
+          {(kid.doctor || kid.doctorPhone) && (
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${p.warm}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <div style={s.infoLabel}>🏥 Doctor</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: p.text }}>{kid.doctor || "Doctor"}</div>
+                {kid.doctorPhone && <div style={{ fontSize: 13, color: p.muted, marginTop: 2 }}>{kid.doctorPhone}</div>}
+              </div>
+              {kid.doctorPhone && (
+                <a
+                  href={`tel:${kid.doctorPhone.replace(/\D/g, "")}`}
+                  onClick={e => e.stopPropagation()}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    background: "#E8F5EE", border: "1.5px solid #7BAF8E",
+                    borderRadius: 12, padding: "10px 16px",
+                    textDecoration: "none", flexShrink: 0,
+                  }}>
+                  <span style={{ fontSize: 20 }}>📞</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "#2A7A4A" }}>Call</span>
+                </a>
+              )}
+            </div>
+          )}
         </div>
       ))}
       <button onClick={() => { setEditingKid(null); setShowEditor(true); }} style={s.addKidBtn}>
@@ -254,25 +327,118 @@ function KidsTab() {
 }
 
 // ─── Share Tab ────────────────────────────────────────────────────────────────
-const MSG_TEMPLATES = ["This week's schedule","Medication reminder","Doctor summary","Upcoming deadlines","Permission forms due"];
+const MSG_TEMPLATES = [
+  { key: "schedule", label: "📅 This week's schedule" },
+  { key: "medications", label: "💊 Medication reminder" },
+  { key: "reminders", label: "📋 Reminders & deadlines" },
+  { key: "kids", label: "👧 Kids info summary" },
+  { key: "pickups", label: "🚗 Drop-off & pick-up" },
+];
+
+function buildMessage(topics, family, fmt) {
+  const coName = family.coParent.name;
+  const myName = family.primaryParent.name;
+  const lines = [];
+  lines.push(`Hi ${coName}! Here's an update from ${myName} 👋`);
+  lines.push("");
+
+  if (topics.includes("schedule")) {
+    const events = (family.schedule || []).filter(e => !e.isReminder);
+    lines.push("📅 SCHEDULE");
+    if (events.length === 0) {
+      lines.push("  No events this week.");
+    } else {
+      events.forEach(e => {
+        const day = e.day ? (() => {
+          if (e.day.includes("T") || e.day.match(/^\d{4}-/)) {
+            return new Date(e.day).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+          }
+          return e.day;
+        })() : "";
+        lines.push(`  ${e.emoji || "📅"} ${e.title}${day ? " · " + day : ""}`);
+        if (e.dropoffBy || e.dropoffTime) lines.push(`     🚗 Drop-off: ${e.dropoffBy || ""}${e.dropoffTime ? " at " + fmt(e.dropoffTime) : ""}`);
+        if (e.pickupBy || e.pickupTime) lines.push(`     🏁 Pick-up: ${e.pickupBy || ""}${e.pickupTime ? " at " + fmt(e.pickupTime) : ""}`);
+        if (e.sub) lines.push(`     📍 ${e.sub}`);
+      });
+    }
+    lines.push("");
+  }
+
+  if (topics.includes("pickups")) {
+    const events = (family.schedule || []).filter(e => !e.isReminder && (e.dropoffBy || e.pickupBy));
+    lines.push("🚗 DROP-OFF & PICK-UP");
+    if (events.length === 0) {
+      lines.push("  No drop-off/pick-up info set yet.");
+    } else {
+      events.forEach(e => {
+        lines.push(`  ${e.emoji || "📅"} ${e.title}`);
+        if (e.dropoffBy || e.dropoffTime) lines.push(`    🚗 Drop: ${e.dropoffBy || "TBD"}${e.dropoffTime ? " at " + fmt(e.dropoffTime) : ""}`);
+        if (e.pickupBy || e.pickupTime) lines.push(`    🏁 Pick-up: ${e.pickupBy || "TBD"}${e.pickupTime ? " at " + fmt(e.pickupTime) : ""}`);
+      });
+    }
+    lines.push("");
+  }
+
+  if (topics.includes("medications")) {
+    lines.push("💊 MEDICATIONS");
+    const kidsWithMeds = (family.kids || []).filter(k => k.medications?.length);
+    if (kidsWithMeds.length === 0) {
+      lines.push("  No medications on file.");
+    } else {
+      kidsWithMeds.forEach(k => {
+        lines.push(`  ${k.emoji || "👦"} ${k.name}:`);
+        k.medications.forEach(m => lines.push(`    • ${m}`));
+        if (k.allergies) lines.push(`    ⚠️ Allergies: ${k.allergies}`);
+      });
+    }
+    lines.push("");
+  }
+
+  if (topics.includes("reminders")) {
+    const reminders = family.reminders || [];
+    lines.push("📋 REMINDERS");
+    if (reminders.length === 0) {
+      lines.push("  No reminders.");
+    } else {
+      reminders.forEach(r => {
+        lines.push(`  ${r.urgent ? "⚡" : "•"} ${r.text || r.title}${r.sub ? " — " + r.sub : ""}`);
+      });
+    }
+    lines.push("");
+  }
+
+  if (topics.includes("kids")) {
+    lines.push("👧 KIDS INFO");
+    (family.kids || []).forEach(k => {
+      lines.push(`  ${k.emoji || "👦"} ${k.name} (age ${k.age})`);
+      if (k.school) lines.push(`    🏫 ${k.school}${k.teacher ? " · " + k.teacher : ""}`);
+      if (k.doctor) lines.push(`    🏥 Dr. ${k.doctor}${k.nextAppt ? " · Next: " + k.nextAppt : ""}`);
+      if (k.allergies) lines.push(`    ⚠️ Allergies: ${k.allergies}`);
+      if (k.activities) lines.push(`    🎽 ${k.activities}`);
+      if (k.notes) lines.push(`    📝 ${k.notes}`);
+    });
+    lines.push("");
+  }
+
+  lines.push(`— ${myName}`);
+  return lines.join("\n");
+}
 
 function ShareTab() {
-  const { family, getFamilyContext, addSentMessage } = useApp();
+  const { family, addSentMessage, fmt } = useApp();
   const [selected, setSelected] = useState([]);
   const [generated, setGenerated] = useState("");
   const [generating, setGenerating] = useState(false);
   const [sent, setSent] = useState(false);
 
-  const toggle = c => setSelected(s => s.includes(c) ? s.filter(x => x !== c) : [...s, c]);
+  const toggle = key => setSelected(s => s.includes(key) ? s.filter(x => x !== key) : [...s, key]);
 
   const generate = async () => {
     if (!selected.length) return;
     setGenerating(true);
-    try {
-      const result = await generateCoParentMessage(selected, getFamilyContext());
-      setGenerated(result?.message || "");
-    } catch { setGenerated("Could not generate — check API key configuration."); }
-    finally { setGenerating(false); }
+    await new Promise(r => setTimeout(r, 300)); // brief moment so button feels responsive
+    setGenerated(buildMessage(selected, family, fmt));
+    setGenerating(false);
   };
 
   const send = () => {
@@ -293,8 +459,8 @@ function ShareTab() {
         <div style={s.composeLabel}>✨ Build a message for {family.coParent.name}</div>
         <div style={{ fontSize: 14, color: p.muted, marginBottom: 12 }}>What should they know about?</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
-          {MSG_TEMPLATES.map(c => (
-            <div key={c} onClick={() => toggle(c)} style={{ ...s.chip2, ...(selected.includes(c) ? s.chip2Active : {}) }}>{c}</div>
+          {MSG_TEMPLATES.map(t => (
+            <div key={t.key} onClick={() => toggle(t.key)} style={{ ...s.chip2, ...(selected.includes(t.key) ? s.chip2Active : {}) }}>{t.label}</div>
           ))}
         </div>
         <button onClick={generate} disabled={generating || !selected.length} style={{

@@ -157,7 +157,25 @@ export default function FindTab() {
   const coParentPhone = family?.coParent?.phone;
 
   const sendToCoParent = (place) => {
-    const msg = `Hey! Found this for the kids: ${place.name} — ${place.formatted_address}${place.website ? `\n${place.website}` : ""}`;
+    const lines = [];
+    lines.push(`Hey! Found something great for the kids 👇`);
+    lines.push("");
+    lines.push(`📍 ${place.name}`);
+    if (place.formatted_address) lines.push(`${place.formatted_address}`);
+    if (place.phone) lines.push(`📞 ${place.phone}`);
+    if (place.website) lines.push(`🌐 ${place.website}`);
+    if (place.rating) lines.push(`⭐ ${place.rating}/5 (${place.user_ratings_total || "?"} reviews)`);
+    if (place.opening_hours?.open_now !== undefined) {
+      lines.push(place.opening_hours.open_now ? "🟢 Open right now" : "🔴 Currently closed");
+    }
+    if (place.price_level != null) {
+      const prices = ["", "$", "$$", "$$$", "$$$$"];
+      lines.push(`💰 ${prices[place.price_level] || "Free / Contact for pricing"}`);
+    }
+    lines.push("");
+    lines.push(`What do you think? Worth checking out for the kids?`);
+
+    const msg = lines.join("\n");
     const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
     const sep = isIOS ? "&" : "?";
     const clean = (coParentPhone || "").replace(/\D/g, "");
