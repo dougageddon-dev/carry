@@ -222,7 +222,11 @@ function TodayTab() {
       {reminders.filter(r => r.urgent).map(r => (
         <div key={r.id} style={s.urgentStrip} onClick={() => { setEditingReminder({ ...r, isReminder: true }); setShowReminderEditor(true); }}>
           <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 20 }}>
-            {r.emoji && r.emoji !== "⚡" ? r.emoji : <svg width="20" height="20" viewBox="0 0 24 24" fill="white" stroke="white" strokeWidth="1"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>}
+            {(r.emoji && r.emoji !== "⚡") ? r.emoji : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="white" stroke="white" strokeWidth="1">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+            )}
           </div>
           <div style={{ flex: 1 }}>
             <div style={s.urgentTitle}>{r.text}</div>
@@ -329,9 +333,14 @@ function TodayTab() {
         >
           <div style={s.cardRow}>
             <div style={{ ...s.timeDot, background: p.warm }}>
-              {r.emoji && r.emoji !== "📋" ? r.emoji :
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8C7B72" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
-              }
+              {(r.emoji && r.emoji !== "📋") ? r.emoji : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8C7B72" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+                  <line x1="9" y1="12" x2="15" y2="12"/>
+                  <line x1="9" y1="16" x2="13" y2="16"/>
+                </svg>
+              )}
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ ...s.cardTitle, fontWeight: 400 }}>{r.text}</div>
@@ -375,9 +384,13 @@ function TodayTab() {
             <div key={item.id} style={{ ...s.card, opacity: 0.6, marginBottom: 8 }}>
               <div style={s.cardRow}>
                 <div style={{ ...s.timeDot, background: p.warm }}>
-                  {item.emoji && item.emoji !== "📋" ? item.emoji :
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8C7B72" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
-                  }
+                  {(item.emoji && item.emoji !== "📋") ? item.emoji : (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8C7B72" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="21 8 21 21 3 21 3 8"/>
+                      <rect x="1" y="3" width="22" height="5"/>
+                      <line x1="10" y1="12" x2="14" y2="12"/>
+                    </svg>
+                  )}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ ...s.cardTitle, fontWeight: 400, textDecoration: "line-through" }}>{item.title || item.text}</div>
@@ -722,54 +735,57 @@ function SettingsTab() {
 }
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
+
+
+
+function NavIcon({ name, active }) {
+  const c = active ? p.accent : p.muted;
+  const icons = {
+    today: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="3"/>
+        <line x1="16" y1="2" x2="16" y2="6"/>
+        <line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+        <circle cx="12" cy="16" r="1.5" fill={c} stroke="none"/>
+      </svg>
+    ),
+    kids: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="9" cy="7" r="3"/>
+        <path d="M3 21v-2a5 5 0 0 1 5-5h2"/>
+        <circle cx="17" cy="10" r="2.5"/>
+        <path d="M13 21v-1.5a4 4 0 0 1 4-4 4 4 0 0 1 4 4V21"/>
+      </svg>
+    ),
+    find: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="11" cy="11" r="7"/>
+        <line x1="16.5" y1="16.5" x2="22" y2="22"/>
+      </svg>
+    ),
+    share: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        <line x1="9" y1="10" x2="15" y2="10"/>
+        <line x1="12" y1="7" x2="12" y2="13"/>
+      </svg>
+    ),
+    settings: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+      </svg>
+    ),
+  };
+  return icons[name] || null;
+}
+
 function AppInner() {
   const [tab, setTab] = useState("today");
   const { family, setFamily } = useApp();
 
   if (!family) return <Onboarding onComplete={data => setFamily(data)} />;
-
-  const NavIcon = ({ name, active }) => {
-    const c = active ? p.accent : p.muted;
-    const icons = {
-      today: (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="4" width="18" height="18" rx="3"/>
-          <line x1="16" y1="2" x2="16" y2="6"/>
-          <line x1="8" y1="2" x2="8" y2="6"/>
-          <line x1="3" y1="10" x2="21" y2="10"/>
-          <circle cx="12" cy="16" r="1.5" fill={c} stroke="none"/>
-        </svg>
-      ),
-      kids: (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="9" cy="7" r="3"/>
-          <path d="M3 21v-2a5 5 0 0 1 5-5h2"/>
-          <circle cx="17" cy="10" r="2.5"/>
-          <path d="M13 21v-1.5a4 4 0 0 1 4-4 4 4 0 0 1 4 4V21"/>
-        </svg>
-      ),
-      find: (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="11" cy="11" r="7"/>
-          <line x1="16.5" y1="16.5" x2="22" y2="22"/>
-        </svg>
-      ),
-      share: (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          <line x1="9" y1="10" x2="15" y2="10"/>
-          <line x1="12" y1="7" x2="12" y2="13"/>
-        </svg>
-      ),
-      settings: (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-        </svg>
-      ),
-    };
-    return icons[name] || null;
-  };
 
   const navItems = [
     { key: "today", label: "Schedule" },
@@ -830,10 +846,6 @@ function AppInner() {
   );
 }
 
-export default function App() {
-  return <AppProvider><AppInner /></AppProvider>;
-}
-
 const globalStyles = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=DM+Sans:wght@300;400;500;600&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -889,3 +901,9 @@ const s = {
   bnavBtn: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, border: "none", background: "none", cursor: "pointer" },
   whoBadge: { display: "inline-flex", alignItems: "center", gap: 5, background: "#F5EDE0", borderRadius: 20, padding: "4px 10px", fontSize: 13, fontWeight: 500, color: "#2A1F1A", marginTop: 6 },
 };
+
+function App() {
+  return <AppProvider><AppInner /></AppProvider>;
+}
+
+export default App;
