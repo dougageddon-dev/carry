@@ -204,52 +204,26 @@ function TodayTab() {
 
   const EventCard = ({ item, hintDelay = 0 }) => {
     const bg = emojiColors[item.emoji] || p.warm;
-    return (
-      <SwipeableCard
-        key={item.id}
-        hintDelay={hintDelay}
-        onDelete={() => archiveEvent(item.id)}
-        onTap={() => { setEditingEvent(item); setShowEventEditor(true); }}
-        style={s.card}
-      >
-        <div style={s.cardRow}>
-          <div style={{ ...s.timeDot, background: bg }}>{item.emoji}</div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={s.cardTitle}>{item.title}</div>
-            {item.sub && <div style={s.cardSub}>{item.sub}</div>}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-              {item.allDay && <span style={{ ...s.tag, background: "#EBF4FF", color: p.blue }}>☀️ All day</span>}
-              {item.repeatWeekly && <span style={{ ...s.tag, background: "#F0EBFF", color: "#6A3ABF" }}>🔁 Weekly</span>}
-              {item.dropoffBy && <span style={{ ...s.tag, background: "#FFF0E8", color: "#B05A2A" }}>🚗 {item.dropoffBy}{item.dropoffTime ? ` · ${fmt(item.dropoffTime)}` : ""}</span>}
-              {item.pickupBy && <span style={{ ...s.tag, background: "#EBF2FA", color: "#2A5080" }}>🏁 {item.pickupBy}{item.pickupTime ? ` · ${fmt(item.pickupTime)}` : ""}</span>}
-            </div>
-          </div>
-          {item.dropoffTime && !item.allDay && (
-            <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 8 }}>
-              <div style={s.cardTime}>{fmt(item.dropoffTime)}</div>
-            </div>
-          )}
-        </div>
-      </SwipeableCard>
-    );
+    // All non-archived events sorted by start date
+  const allEvents = (family.schedule || [])
+    .filter(e => !e.isReminder && !e.archived)
+    .sort((a, b) => new Date(a.day || 0) - new Date(b.day || 0));
+
+  const emojiColors2 = {
+    "🏊": p.blueSoft, "💊": p.purpleSoft, "⚽": p.greenSoft,
+    "🏐": p.greenSoft, "💃": "#FFE4F0", "🎵": "#E8F4FF",
+    "🏥": "#FFE0D6", "📅": p.warm,
   };
 
   return (
     <div style={{ padding: "16px 16px 100px" }}>
 
-      {/* Week header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-        <div>
-          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700, color: p.text }}>This week</div>
-          <div style={{ fontSize: 13, color: p.muted, marginTop: 2 }}>{weekLabel}</div>
-        </div>
-        <button onClick={() => { setEditingEvent(null); setShowEventEditor(true); }} style={s.addBtn}>+ Add event</button>
-      </div>
-
       {/* Urgent reminders */}
       {reminders.filter(r => r.urgent).map(r => (
         <div key={r.id} style={s.urgentStrip} onClick={() => { setEditingReminder({ ...r, isReminder: true }); setShowReminderEditor(true); }}>
-          <div style={{ fontSize: 26 }}>{r.emoji || "⚡"}</div>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 20 }}>
+            {r.emoji && r.emoji !== "⚡" ? r.emoji : <svg width="20" height="20" viewBox="0 0 24 24" fill="white" stroke="white" strokeWidth="1"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>}
+          </div>
           <div style={{ flex: 1 }}>
             <div style={s.urgentTitle}>{r.text}</div>
             {r.sub && <div style={s.urgentSub}>{r.sub}</div>}
@@ -261,12 +235,12 @@ function TodayTab() {
       {/* Send strip */}
       {family.coParent.name && (
         <div style={s.sendStrip}>
-          <div style={{ fontSize: 22 }}>📱</div>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2A7A4A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.5 1.18 2 2 0 012.5 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.92z"/></svg>
           <div style={{ flex: 1 }}>
             <strong style={{ display: "block", fontSize: 14, fontWeight: 600, color: p.green, marginBottom: 1 }}>
               Send to {family.coParent.name}
             </strong>
-            <span style={{ fontSize: 13, color: p.text }}>This week's schedule</span>
+            <span style={{ fontSize: 13, color: p.text }}>{allEvents.length} upcoming events</span>
           </div>
           <button style={s.sendBtn} onClick={handleSend} disabled={sendLoading}>
             {sendDone ? "✓ Done!" : sendLoading ? "…" : "Send"}
@@ -274,60 +248,73 @@ function TodayTab() {
         </div>
       )}
 
-      {/* Week day rows */}
-      {weekDays.map((day, dayIdx) => {
-        const isToday = day.getTime() === todayMidnight.getTime();
-        const isPast = day < todayMidnight;
-        const dayEvents = allEvents.filter(e => eventOccursOn(e, day));
-        const dayName = day.toLocaleDateString("en-US", { weekday: "long" });
-        const dayShort = day.toLocaleDateString("en-US", { weekday: "short" });
-        const dayNum = day.getDate();
-        const monthShort = day.toLocaleDateString("en-US", { month: "short" });
+      {/* Events header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20, marginBottom: 12 }}>
+        <div style={s.sectionLabel}>Upcoming Events</div>
+        <button onClick={() => { setEditingEvent(null); setShowEventEditor(true); }} style={s.addBtn}>+ Add event</button>
+      </div>
 
-        return (
-          <div key={dayIdx} style={{ marginBottom: 6 }}>
-            {/* Day header */}
-            <div style={{
-              display: "flex", alignItems: "center", gap: 12,
-              padding: "10px 4px 8px",
-              borderTop: dayIdx === 0 ? "none" : `1px solid ${p.warm}`,
-              opacity: isPast && !isToday ? 0.5 : 1,
-            }}>
-              {/* Date circle */}
-              <div style={{
-                width: 42, height: 42, borderRadius: "50%", flexShrink: 0,
-                background: isToday ? p.accent : "transparent",
-                border: isToday ? "none" : `1.5px solid ${isPast ? "#E0D8D0" : p.warm}`,
-                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              }}>
-                <div style={{ fontSize: 16, fontWeight: 700, color: isToday ? "#fff" : isPast ? p.muted : p.text, lineHeight: 1 }}>{dayNum}</div>
-                <div style={{ fontSize: 9, fontWeight: 600, color: isToday ? "rgba(255,255,255,0.8)" : p.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>{monthShort}</div>
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: isToday ? 700 : 600, color: isToday ? p.accent : isPast ? p.muted : p.text }}>
-                  {isToday ? "Today — " : ""}{dayName}
-                </div>
-                {dayEvents.length === 0 && (
-                  <div style={{ fontSize: 12, color: "#C0B8B0", marginTop: 1 }}>No events</div>
-                )}
-              </div>
-              {dayEvents.length > 0 && (
-                <div style={{ background: isToday ? p.accentLight : p.warm, borderRadius: 100, padding: "3px 10px", fontSize: 12, fontWeight: 700, color: isToday ? p.accent : p.muted }}>
-                  {dayEvents.length}
-                </div>
-              )}
-            </div>
-
-            {/* Events for this day */}
-            {dayEvents.map((item, idx) => (
-              <EventCard key={item.id} item={item} hintDelay={isToday && idx === 0 ? 2500 : 0} />
-            ))}
+      {allEvents.length === 0 && (
+        <div style={s.emptyState}>
+          <div style={{ marginBottom: 10 }}>
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#E8825A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="8" cy="15" r="1.5" fill="#E8825A" stroke="none"/><circle cx="12" cy="15" r="1.5" fill="#E8825A" stroke="none"/><circle cx="16" cy="15" r="1.5" fill="#E8825A" stroke="none"/></svg>
           </div>
+          <div style={{ fontSize: 16, color: p.muted, marginBottom: 14 }}>No events yet</div>
+          <button onClick={() => { setEditingEvent(null); setShowEventEditor(true); }} style={{ ...s.sendBtn, padding: "10px 24px", borderRadius: 20 }}>Add your first event</button>
+        </div>
+      )}
+
+      {allEvents.map((item, idx) => {
+        const bg = emojiColors2[item.emoji] || p.warm;
+        const startDate = item.day ? parseLocalDate(item.day) : null;
+        const today2 = new Date(); today2.setHours(0,0,0,0);
+        const isPast = startDate && startDate < today2 && !item.endDay;
+        return (
+          <SwipeableCard
+            key={item.id}
+            hintDelay={idx === 0 ? 2000 : 0}
+            onDelete={() => archiveEvent(item.id)}
+            onTap={() => { setEditingEvent(item); setShowEventEditor(true); }}
+            style={{ ...s.card, opacity: isPast ? 0.5 : 1 }}
+          >
+            <div style={s.cardRow}>
+              <div style={{ ...s.timeDot, background: bg }}>{item.emoji}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={s.cardTitle}>{item.title}</div>
+                {item.sub && <div style={s.cardSub}>{item.sub}</div>}
+                {/* Date pill */}
+                {item.day && (
+                  <div style={{ marginTop: 5, marginBottom: 4, display: "flex", flexWrap: "wrap", gap: 5 }}>
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", gap: 5,
+                      background: item.allDay ? "#EBF4FF" : p.accentLight,
+                      color: item.allDay ? p.blue : p.accent,
+                      borderRadius: 8, padding: "4px 10px", fontSize: 13, fontWeight: 700,
+                    }}>
+                      {item.allDay ? "☀️" : "📅"} {formatDay(item.day, item.endDay)}
+                      {item.allDay && " · All day"}
+                    </span>
+                    {item.repeatWeekly && (
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", gap: 4,
+                        background: "#F0EBFF", color: "#6A3ABF",
+                        borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600,
+                      }}>🔁 Weekly{item.repeatUntil ? ` until ${formatDay(item.repeatUntil)}` : ""}</span>
+                    )}
+                  </div>
+                )}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 2 }}>
+                  {item.dropoffBy && <span style={{ ...s.tag, background: "#FFF0E8", color: "#B05A2A" }}>🚗 {item.dropoffBy}{item.dropoffTime ? ` · ${fmt(item.dropoffTime)}` : ""}</span>}
+                  {item.pickupBy && <span style={{ ...s.tag, background: "#EBF2FA", color: "#2A5080" }}>🏁 {item.pickupBy}{item.pickupTime ? ` · ${fmt(item.pickupTime)}` : ""}</span>}
+                </div>
+              </div>
+            </div>
+          </SwipeableCard>
         );
       })}
 
       {/* Reminders section */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20, marginBottom: 12, paddingTop: 16, borderTop: `1px solid ${p.warm}` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 24, marginBottom: 12, paddingTop: 16, borderTop: `1px solid ${p.warm}` }}>
         <div style={s.sectionLabel}>Reminders</div>
         <button onClick={() => { setEditingReminder(null); setShowReminderEditor(true); }} style={s.addBtn}>+ Add reminder</button>
       </div>
@@ -335,20 +322,25 @@ function TodayTab() {
       {reminders.filter(r => !r.urgent).map((r, idx) => (
         <SwipeableCard
           key={r.id}
-          hintDelay={idx === 0 && reminders.filter(x => !x.urgent).length > 0 ? 3500 : 0}
+          hintDelay={idx === 0 ? 3500 : 0}
           onDelete={() => archiveReminder(r.id)}
           onTap={() => { setEditingReminder({ ...r, isReminder: true }); setShowReminderEditor(true); }}
           style={s.card}
         >
           <div style={s.cardRow}>
-            <div style={{ ...s.timeDot, background: p.warm }}>{r.emoji || "📋"}</div>
+            <div style={{ ...s.timeDot, background: p.warm }}>
+              {r.emoji && r.emoji !== "📋" ? r.emoji :
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8C7B72" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+              }
+            </div>
             <div style={{ flex: 1 }}>
               <div style={{ ...s.cardTitle, fontWeight: 400 }}>{r.text}</div>
               {r.sub && <div style={s.cardSub}>{r.sub}</div>}
               {r.notifyDate && r.notifyTime && (
                 <div style={{ marginTop: 5 }}>
                   <span style={{ ...s.tag, background: "#E8F0FF", color: "#1A3A80" }}>
-                    🔔 {new Date(r.notifyDate).toLocaleDateString("en-US",{month:"short",day:"numeric"})} · {fmt(r.notifyTime)}
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1A3A80" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{verticalAlign:"middle",marginRight:4}}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    {new Date(r.notifyDate).toLocaleDateString("en-US",{month:"short",day:"numeric"})} · {fmt(r.notifyTime)}
                   </span>
                 </div>
               )}
@@ -357,7 +349,11 @@ function TodayTab() {
           </div>
         </SwipeableCard>
       ))}
-      {reminders.length === 0 && <div style={{ ...s.emptyState, padding: "18px" }}><div style={{ fontSize: 15, color: p.muted }}>No reminders yet</div></div>}
+      {reminders.length === 0 && (
+        <div style={{ ...s.emptyState, padding: "18px" }}>
+          <div style={{ fontSize: 15, color: p.muted }}>No reminders yet</div>
+        </div>
+      )}
 
       {/* Archive toggle */}
       {totalArchived > 0 && (
@@ -367,19 +363,22 @@ function TodayTab() {
           color: p.muted, fontSize: 14, fontWeight: 500, cursor: "pointer",
           fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
         }}>
-          <span>🗂️</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8C7B72" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
           <span>{showArchived ? "Hide" : "Show"} archive ({totalArchived})</span>
         </button>
       )}
 
-      {/* Archived items */}
       {showArchived && (
         <div style={{ marginTop: 12 }}>
           <div style={{ ...s.sectionLabel, marginBottom: 12, opacity: 0.6 }}>Archived</div>
           {[...archivedEvents, ...archivedReminders].map(item => (
             <div key={item.id} style={{ ...s.card, opacity: 0.6, marginBottom: 8 }}>
               <div style={s.cardRow}>
-                <div style={{ ...s.timeDot, background: p.warm }}>{item.emoji || "📋"}</div>
+                <div style={{ ...s.timeDot, background: p.warm }}>
+                  {item.emoji && item.emoji !== "📋" ? item.emoji :
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8C7B72" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+                  }
+                </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ ...s.cardTitle, fontWeight: 400, textDecoration: "line-through" }}>{item.title || item.text}</div>
                   {item.sub && <div style={s.cardSub}>{item.sub}</div>}
@@ -413,7 +412,6 @@ function TodayTab() {
   );
 }
 
-// ─── Kids Tab ─────────────────────────────────────────────────────────────────
 function KidsTab() {
   const { family, addKid, updateKid, removeKid } = useApp();
   const [showEditor, setShowEditor] = useState(false);
@@ -636,7 +634,7 @@ function ShareTab() {
           <>
             <textarea style={s.textArea} value={generated} onChange={e => setGenerated(e.target.value)} rows={6} />
             <button onClick={send} style={{ ...s.sendBtn, width: "100%", borderRadius: 12, padding: "13px", fontSize: 15, background: p.green }}>
-              {sent ? "✓ Opened Messages!" : "📱 Send via iMessage"}
+              {sent ? "✓ Sent!" : "Send via iMessage"}
             </button>
           </>
         )}
@@ -774,7 +772,7 @@ function AppInner() {
   };
 
   const navItems = [
-    { key: "today", label: "Week" },
+    { key: "today", label: "Schedule" },
     { key: "kids", label: "Kids" },
     { key: "find", label: "Find" },
     { key: "share", label: "Share" },
@@ -801,14 +799,6 @@ function AppInner() {
               </div>
             </div>
           </div>
-        </div>
-
-        <div style={s.nav}>
-          {navItems.map(({ key, label }) => (
-            <button key={key} style={{ ...s.navBtn, ...(tab===key ? s.navBtnActive : {}) }} onClick={() => setTab(key)}>
-              {label}
-            </button>
-          ))}
         </div>
 
         {tab === "today" && <TodayTab />}
@@ -860,9 +850,9 @@ const s = {
   appName: { fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#2A1F1A", fontWeight: 700 },
   headerSub: { fontSize: 15, color: "#8C7B72", fontWeight: 300 },
   avatar: { width: 36, height: 36, borderRadius: "50%", border: "2px solid white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 600 },
-  nav: { display: "flex", background: "#fff", borderBottom: "1px solid #F5EDE0", padding: "0 4px", overflowX: "auto" },
-  navBtn: { padding: "13px 10px", fontSize: 13, fontWeight: 500, color: "#8C7B72", border: "none", background: "none", cursor: "pointer", borderBottom: "2px solid transparent", whiteSpace: "nowrap" },
-  navBtnActive: { color: "#E8825A", borderBottomColor: "#E8825A" },
+  nav: { display: "flex", gap: 6, background: "#FDF8F3", padding: "10px 16px", overflowX: "auto", borderBottom: "1px solid #F5EDE0" },
+  navBtn: { padding: "8px 16px", fontSize: 13, fontWeight: 500, color: "#8C7B72", border: "1.5px solid #F5EDE0", background: "#fff", cursor: "pointer", borderRadius: 100, whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 },
+  navBtnActive: { color: "#fff", background: "#E8825A", borderColor: "#E8825A", fontWeight: 700 },
   dateBadge: { fontSize: 13, fontWeight: 500, color: "#8C7B72", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 16 },
   urgentStrip: { background: "linear-gradient(135deg,#E8825A,#D4624A)", borderRadius: 16, padding: "18px 20px", marginBottom: 12, color: "#fff", display: "flex", alignItems: "center", gap: 12, cursor: "pointer" },
   urgentTitle: { fontSize: 16, fontWeight: 600, marginBottom: 2 },
