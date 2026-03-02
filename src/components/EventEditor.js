@@ -578,6 +578,7 @@ export default function EventEditor({ event, people, onSave, onDelete, onClose, 
               />
               {/* Hide time pickers when all-day */}
               {!form.allDay && (
+              <>
               <div style={{ background: "#FFF5F0", borderRadius: 14, padding: 16, border: "1px solid #FFD5C0", marginBottom: 14 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: "#8C3A00", marginBottom: 14, display: "flex", alignItems: "center", gap: 7 }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8C3A00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v7a2 2 0 0 1-2 2h-2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M9 11V5l-4 6h7"/></svg>
@@ -600,6 +601,7 @@ export default function EventEditor({ event, people, onSave, onDelete, onClose, 
                 </div>
                 <PersonPicker label="Who's picking up?" value={form.pickupBy || ""} onChange={v => set("pickupBy", v)} people={people} />
               </div>
+              </>
               )}
             </>
           )}
