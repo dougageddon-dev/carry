@@ -207,83 +207,188 @@ function PersonPicker({ label, value, onChange, people }) {
   );
 }
 
-// ─── Day picker: week strip + calendar ───────────────────────────────────────
-function DayPicker({ value, onChange }) {
-  const [showCal, setShowCal] = useState(false);
+// ─── Day picker: week strip + calendar + all-day + multi-day + repeat ────────
+function isoToLocal(v) {
+  if (!v) return null;
+  if (v.includes("T") || /^\d{4}-\d{2}-\d{2}/.test(v)) return new Date(v);
+  return null;
+}
+function fmtShortDate(v) {
+  const d = isoToLocal(v);
+  return d ? d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "";
+}
+
+function DayPicker({ value, endValue, allDay, repeatWeekly, repeatUntil,
+  onChange, onEndChange, onAllDayChange, onRepeatChange, onRepeatUntilChange }) {
+
+  const [showCalStart, setShowCalStart]     = useState(false);
+  const [showCalEnd, setShowCalEnd]         = useState(false);
+  const [showCalRepeat, setShowCalRepeat]   = useState(false);
+  const [multiDay, setMultiDay]             = useState(!!endValue);
+
   const today = new Date();
   const weekDays = [];
-  const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - today.getDay());
+  const sow = new Date(today);
+  sow.setDate(today.getDate() - today.getDay());
   for (let i = 0; i < 7; i++) {
-    const d = new Date(startOfWeek);
-    d.setDate(startOfWeek.getDate() + i);
-    weekDays.push(d);
+    const d = new Date(sow); d.setDate(sow.getDate() + i); weekDays.push(d);
   }
   const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-  const isWeekDaySelected = (d) => {
-    if (!value) return false;
-    if (value.includes("T") || value.match(/^\d{4}-/)) {
-      const sel = new Date(value);
-      return sel.getFullYear() === d.getFullYear() && sel.getMonth() === d.getMonth() && sel.getDate() === d.getDate();
-    }
-    const name = d.toLocaleDateString("en-US", { weekday: "long" });
-    if (value === "Today") return d.toDateString() === today.toDateString();
-    const tom = new Date(today); tom.setDate(today.getDate() + 1);
-    if (value === "Tomorrow") return d.toDateString() === tom.toDateString();
-    return name === value;
+  const sameDay = (a, b) =>
+    a && b && a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+
+  const isInRange = (d) => {
+    if (!multiDay || !value || !endValue) return false;
+    const s = isoToLocal(value), e = isoToLocal(endValue);
+    if (!s || !e) return false;
+    const t = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    return t > s.getTime() && t < e.getTime();
   };
 
-  const isFurtherSelected = value && (value.includes("T") || value.match(/^\d{4}-/)) && !weekDays.some(d => isWeekDaySelected(d));
-  const furtherLabel = isFurtherSelected
-    ? new Date(value).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
-    : "Pick a date further out…";
+  const selStart  = isoToLocal(value);
+  const selEnd    = isoToLocal(endValue);
+  const selRepeat = isoToLocal(repeatUntil);
+
+  const isFurtherStart  = selStart  && !weekDays.some(d => sameDay(d, selStart));
+  const isFurtherEnd    = selEnd    && !weekDays.some(d => sameDay(d, selEnd));
+  const isFurtherRepeat = selRepeat && !weekDays.some(d => sameDay(d, selRepeat));
+
+  // Toggle style helper
+  const toggleStyle = (active) => ({
+    flex: 1, padding: "9px 6px", borderRadius: 10, fontSize: 13, fontWeight: 600,
+    border: `1.5px solid ${active ? p.accent : p.warm}`,
+    background: active ? p.accentLight : p.white,
+    color: active ? p.accent : p.muted,
+    cursor: "pointer", fontFamily: "inherit",
+  });
+
+  // Week strip button
+  const dayBtn = (d, isSelected, inRange, isEnd, onClick) => {
+    const isToday = sameDay(d, today);
+    const isPast  = d < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    return (
+      <button key={d.getDate()} type="button" onClick={onClick} style={{
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+        padding: "10px 0", borderRadius: 12,
+        border: `1.5px solid ${isSelected ? (isEnd ? p.blue : p.accent) : inRange ? "#C0D8F0" : isToday ? "#F2C4A8" : p.warm}`,
+        background: isSelected ? (isEnd ? p.blue : p.accent) : inRange ? "#EBF4FF" : isToday ? p.accentLight : p.white,
+        color: isSelected ? p.white : isPast ? "#ccc" : p.text,
+        cursor: "pointer", fontFamily: "inherit",
+      }}>
+        <span style={{ fontSize: 11, fontWeight: 600 }}>{DOW[d.getDay()]}</span>
+        <span style={{ fontSize: 17, fontWeight: 700 }}>{d.getDate()}</span>
+        <span style={{ fontSize: 10, color: isSelected ? "rgba(255,255,255,0.7)" : p.muted }}>{MON[d.getMonth()]}</span>
+      </button>
+    );
+  };
 
   return (
     <div style={{ marginBottom: 16 }}>
-      <div style={lbl}>Day</div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginTop: 8 }}>
-        {weekDays.map((d, i) => {
-          const isToday = d.toDateString() === today.toDateString();
-          const isPast = d < new Date(today.getFullYear(), today.getMonth(), today.getDate());
-          const isSel = isWeekDaySelected(d);
-          return (
-            <button key={i} type="button" onClick={() => onChange(d.toISOString())} style={{
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-              padding: "10px 0", borderRadius: 12,
-              border: `1.5px solid ${isSel ? p.accent : isToday ? "#F2C4A8" : p.warm}`,
-              background: isSel ? p.accent : isToday ? p.accentLight : p.white,
-              color: isSel ? p.white : isPast ? "#ccc" : p.text,
-              cursor: "pointer", fontFamily: "inherit",
-            }}>
-              <span style={{ fontSize: 11, fontWeight: 600 }}>{DOW[d.getDay()]}</span>
-              <span style={{ fontSize: 17, fontWeight: 700 }}>{d.getDate()}</span>
-              <span style={{ fontSize: 10, color: isSel ? "rgba(255,255,255,0.7)" : p.muted }}>{MON[d.getMonth()]}</span>
-            </button>
-          );
-        })}
+
+      {/* ── Option toggles ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 12 }}>
+        <button type="button" onClick={() => onAllDayChange(!allDay)} style={toggleStyle(allDay)}>☀️ All day</button>
+        <button type="button" onClick={() => { const next = !multiDay; setMultiDay(next); if (!next) onEndChange(""); }} style={toggleStyle(multiDay)}>📆 Multi-day</button>
+        <button type="button" onClick={() => { onRepeatChange(!repeatWeekly); if (repeatWeekly) onRepeatUntilChange(""); }} style={toggleStyle(repeatWeekly)}>🔁 Weekly</button>
       </div>
-      <button type="button" onClick={() => setShowCal(true)} style={{
+
+      {/* ── Start date ── */}
+      <div style={lbl}>{multiDay ? "Start date" : "Day"}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginTop: 8 }}>
+        {weekDays.map(d => dayBtn(
+          d,
+          sameDay(d, selStart),
+          isInRange(d),
+          false,
+          () => onChange(d.toISOString())
+        ))}
+      </div>
+      <button type="button" onClick={() => setShowCalStart(true)} style={{
         width: "100%", marginTop: 8, padding: "12px", borderRadius: 12,
-        border: `1.5px solid ${isFurtherSelected ? p.accent : p.warm}`,
-        background: isFurtherSelected ? p.accentLight : p.white,
-        color: isFurtherSelected ? p.accent : p.muted,
-        fontSize: 15, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+        border: `1.5px solid ${isFurtherStart ? p.accent : p.warm}`,
+        background: isFurtherStart ? p.accentLight : p.white,
+        color: isFurtherStart ? p.accent : p.muted,
+        fontSize: 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
         display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
       }}>
-        <span>📆</span><span>{furtherLabel}</span>
+        <span>📆</span>
+        <span>{isFurtherStart ? fmtShortDate(value) : (multiDay ? "Start date further out…" : "Pick a date further out…")}</span>
       </button>
-      {showCal && (
-        <MobileCalendar
-          selected={value && (value.includes("T") || value.match(/^\d{4}-/)) ? value : null}
-          onChange={iso => { onChange(iso); setShowCal(false); }}
-          onClose={() => setShowCal(false)}
-        />
+
+      {/* ── End date (multi-day) ── */}
+      {multiDay && (
+        <div style={{ marginTop: 14 }}>
+          <div style={lbl}>End date</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginTop: 8 }}>
+            {weekDays.map(d => dayBtn(
+              d,
+              sameDay(d, selEnd),
+              isInRange(d),
+              true,
+              () => onEndChange(d.toISOString())
+            ))}
+          </div>
+          <button type="button" onClick={() => setShowCalEnd(true)} style={{
+            width: "100%", marginTop: 8, padding: "12px", borderRadius: 12,
+            border: `1.5px solid ${isFurtherEnd ? p.blue : p.warm}`,
+            background: isFurtherEnd ? "#EBF4FF" : p.white,
+            color: isFurtherEnd ? p.blue : p.muted,
+            fontSize: 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          }}>
+            <span>📆</span>
+            <span>{isFurtherEnd ? fmtShortDate(endValue) : "End date further out…"}</span>
+          </button>
+        </div>
       )}
+
+      {/* ── Repeat until (weekly) ── */}
+      {repeatWeekly && (
+        <div style={{ marginTop: 14, background: "#F5F0FF", borderRadius: 12, padding: 14, border: "1px solid #D8C8F0" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#5A3A9A", marginBottom: 10 }}>🔁 Repeats every week</div>
+          <div style={{ fontSize: 13, color: "#7A5ABF", marginBottom: 10 }}>
+            Starting {fmtShortDate(value) || "selected date"} · every {value ? new Date(value).toLocaleDateString("en-US", { weekday: "long" }) : "—"}
+          </div>
+          <div style={lbl}>Repeat until (optional)</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginTop: 8 }}>
+            {weekDays.map(d => dayBtn(
+              d,
+              sameDay(d, selRepeat),
+              false,
+              true,
+              () => onRepeatUntilChange(d.toISOString())
+            ))}
+          </div>
+          <button type="button" onClick={() => setShowCalRepeat(true)} style={{
+            width: "100%", marginTop: 8, padding: "12px", borderRadius: 12,
+            border: `1.5px solid ${isFurtherRepeat ? "#7A5ABF" : "#D8C8F0"}`,
+            background: isFurtherRepeat ? "#EDE8FF" : p.white,
+            color: isFurtherRepeat ? "#5A3A9A" : p.muted,
+            fontSize: 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          }}>
+            <span>📆</span>
+            <span>{isFurtherRepeat ? fmtShortDate(repeatUntil) : "Pick an end date…"}</span>
+          </button>
+          {repeatUntil && (
+            <button type="button" onClick={() => onRepeatUntilChange("")} style={{
+              background: "none", border: "none", color: p.muted, fontSize: 13,
+              cursor: "pointer", fontFamily: "inherit", padding: "6px 0 0",
+            }}>Clear end date (repeat forever)</button>
+          )}
+        </div>
+      )}
+
+      {/* ── Calendars ── */}
+      {showCalStart && <MobileCalendar selected={selStart ? value : null} onChange={iso => { onChange(iso); setShowCalStart(false); }} onClose={() => setShowCalStart(false)} />}
+      {showCalEnd   && <MobileCalendar selected={selEnd   ? endValue : null} onChange={iso => { onEndChange(iso); setShowCalEnd(false); }} onClose={() => setShowCalEnd(false)} />}
+      {showCalRepeat && <MobileCalendar selected={selRepeat ? repeatUntil : null} onChange={iso => { onRepeatUntilChange(iso); setShowCalRepeat(false); }} onClose={() => setShowCalRepeat(false)} />}
     </div>
   );
 }
+
 
 // ─── Notification picker for reminders ───────────────────────────────────────
 function NotificationPicker({ notifyDate, notifyTime, onDateChange, onTimeChange }) {
@@ -360,6 +465,8 @@ export default function EventEditor({ event, people, onSave, onDelete, onClose, 
   const [form, setForm] = useState(event || {
     id: uid(), emoji: "📅", title: "", sub: "",
     time: "", day: new Date().toISOString(),
+    endDay: "", allDay: false,
+    repeatWeekly: false, repeatUntil: "",
     dropoffBy: "", dropoffTime: "",
     pickupBy: "", pickupTime: "",
     isReminder: defaultIsReminder, urgent: false,
@@ -402,15 +509,24 @@ export default function EventEditor({ event, people, onSave, onDelete, onClose, 
         <div style={{ overflowY: "auto", flex: 1 }}>
           {/* Type toggle */}
           <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
-            {[["📅 Schedule", false], ["🔔 Reminder", true]].map(([label, val]) => (
-              <button key={label} type="button" onClick={() => set("isReminder", val)} style={{
-                flex: 1, padding: "11px", borderRadius: 12, fontSize: 15, fontWeight: 500,
-                border: `1.5px solid ${form.isReminder === val ? p.accent : p.warm}`,
-                background: form.isReminder === val ? p.accentLight : p.white,
-                color: form.isReminder === val ? p.accent : p.muted,
-                cursor: "pointer", fontFamily: "inherit",
-              }}>{label}</button>
-            ))}
+            {[
+              { label: "Schedule", val: false, svg: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
+              { label: "Reminder", val: true, svg: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg> },
+            ].map(({ label, val, svg }) => {
+              const active = form.isReminder === val;
+              const c = active ? p.accent : p.muted;
+              return (
+                <button key={label} type="button" onClick={() => set("isReminder", val)} style={{
+                  flex: 1, padding: "11px", borderRadius: 12, fontSize: 15, fontWeight: 500,
+                  border: `1.5px solid ${active ? p.accent : p.warm}`,
+                  background: active ? p.accentLight : p.white,
+                  color: c, cursor: "pointer", fontFamily: "inherit",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+                }}>
+                  {svg(c)}{label}
+                </button>
+              );
+            })}
           </div>
 
           {/* Title */}
@@ -448,9 +564,25 @@ export default function EventEditor({ event, people, onSave, onDelete, onClose, 
 
           {!form.isReminder && (
             <>
-              <DayPicker value={form.day} onChange={v => set("day", v)} />
+              <DayPicker
+                value={form.day}
+                endValue={form.endDay || ""}
+                allDay={form.allDay || false}
+                repeatWeekly={form.repeatWeekly || false}
+                repeatUntil={form.repeatUntil || ""}
+                onChange={v => set("day", v)}
+                onEndChange={v => set("endDay", v)}
+                onAllDayChange={v => { set("allDay", v); if (v) { set("dropoffTime", ""); set("pickupTime", ""); } }}
+                onRepeatChange={v => set("repeatWeekly", v)}
+                onRepeatUntilChange={v => set("repeatUntil", v)}
+              />
+              {/* Hide time pickers when all-day */}
+              {!form.allDay && (
               <div style={{ background: "#FFF5F0", borderRadius: 14, padding: 16, border: "1px solid #FFD5C0", marginBottom: 14 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#8C3A00", marginBottom: 14 }}>🚗 Drop-off</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#8C3A00", marginBottom: 14, display: "flex", alignItems: "center", gap: 7 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8C3A00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v7a2 2 0 0 1-2 2h-2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M9 11V5l-4 6h7"/></svg>
+                  Drop-off
+                </div>
                 <div style={{ marginBottom: 14 }}>
                   <div style={lbl}>Drop-off time</div>
                   <TimePicker value={form.dropoffTime || ""} onChange={v => set("dropoffTime", v)} />
@@ -458,13 +590,17 @@ export default function EventEditor({ event, people, onSave, onDelete, onClose, 
                 <PersonPicker label="Who's dropping off?" value={form.dropoffBy || ""} onChange={v => set("dropoffBy", v)} people={people} />
               </div>
               <div style={{ background: "#F0F7FF", borderRadius: 14, padding: 16, border: "1px solid #C0D8F0", marginBottom: 14 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#1A4A80", marginBottom: 14 }}>🏁 Pick-up</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#1A4A80", marginBottom: 14, display: "flex", alignItems: "center", gap: 7 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1A4A80" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                  Pick-up
+                </div>
                 <div style={{ marginBottom: 14 }}>
                   <div style={lbl}>Pick-up time</div>
                   <TimePicker value={form.pickupTime || ""} onChange={v => set("pickupTime", v)} />
                 </div>
                 <PersonPicker label="Who's picking up?" value={form.pickupBy || ""} onChange={v => set("pickupBy", v)} people={people} />
               </div>
+              )}
             </>
           )}
 

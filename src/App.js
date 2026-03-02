@@ -24,17 +24,32 @@ const smsLink = (phone, body) => {
 };
 
 // Format an ISO date string or named day for display
-function formatDay(val) {
+function formatDay(val, endVal, allDay) {
   if (!val) return "";
-  if (val.includes("T") || val.match(/^\d{4}-\d{2}-\d{2}/)) {
-    const d = new Date(val);
-    const today = new Date();
-    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-    if (d.toDateString() === today.toDateString()) return "Today";
-    if (d.toDateString() === tomorrow.toDateString()) return "Tomorrow";
-    return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const parseD = (v) => {
+    if (!v) return null;
+    if (v.includes("T") || v.match(/^\d{4}-\d{2}-\d{2}/)) return new Date(v);
+    return null;
+  };
+  const d = parseD(val);
+  if (!d) return val;
+
+  const today = new Date();
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+  const isToday = d.toDateString() === today.toDateString();
+  const isTomorrow = d.toDateString() === tomorrow.toDateString();
+
+  const fmtShort = (dt) => dt.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const startStr = isToday ? "Today" : isTomorrow ? "Tomorrow" : fmtShort(d);
+
+  if (endVal) {
+    const end = parseD(endVal);
+    if (end) {
+      const endStr = fmtShort(end);
+      return `${startStr} – ${endStr}`;
+    }
   }
-  return val;
+  return startStr;
 }
 
 // Fire any pending reminder notifications on load
@@ -160,7 +175,7 @@ function TodayTab() {
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 24, marginBottom: 12 }}>
         <div style={s.sectionLabel}>Today's Schedule</div>
-        <button onClick={() => { setEditingEvent(null); setShowEventEditor(true); }} style={s.addBtn}>＋ Add event</button>
+        <button onClick={() => { setEditingEvent(null); setShowEventEditor(true); }} style={s.addBtn}>+ Add event</button>
       </div>
 
       {schedule.length === 0 && (
@@ -188,8 +203,31 @@ function TodayTab() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={s.cardTitle}>{item.title}</div>
                 {item.sub && <div style={s.cardSub}>{item.sub}</div>}
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-                  {item.day && <span style={s.tag}>{formatDay(item.day)}</span>}
+                {item.day && (
+                  <div style={{ marginTop: 5, marginBottom: 4, display: "flex", flexWrap: "wrap", gap: 5 }}>
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", gap: 5,
+                      background: item.allDay ? "#EBF4FF" : p.accentLight,
+                      color: item.allDay ? p.blue : p.accent,
+                      borderRadius: 8, padding: "4px 10px",
+                      fontSize: 14, fontWeight: 700,
+                    }}>
+                      {item.allDay ? "☀️" : "📅"} {formatDay(item.day, item.endDay, item.allDay)}
+                      {item.allDay && " · All day"}
+                    </span>
+                    {item.repeatWeekly && (
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", gap: 4,
+                        background: "#F0EBFF", color: "#6A3ABF",
+                        borderRadius: 8, padding: "4px 10px",
+                        fontSize: 13, fontWeight: 600,
+                      }}>
+                        🔁 Weekly{item.repeatUntil ? ` until ${formatDay(item.repeatUntil)}` : ""}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
                   {item.dropoffBy && <span style={{ ...s.tag, background: "#FFF0E8", color: "#B05A2A" }}>Drop: {item.dropoffBy}{item.dropoffTime ? ` · ${fmt(item.dropoffTime)}` : ""}</span>}
                   {item.pickupBy && <span style={{ ...s.tag, background: "#EBF2FA", color: "#2A5080" }}>Pick up: {item.pickupBy}{item.pickupTime ? ` · ${fmt(item.pickupTime)}` : ""}</span>}
                 </div>
@@ -204,7 +242,7 @@ function TodayTab() {
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 24, marginBottom: 12 }}>
         <div style={s.sectionLabel}>Reminders</div>
-        <button onClick={() => { setEditingReminder(null); setShowReminderEditor(true); }} style={s.addBtn}>＋ Add reminder</button>
+        <button onClick={() => { setEditingReminder(null); setShowReminderEditor(true); }} style={s.addBtn}>+ Add reminder</button>
       </div>
 
       {reminders.filter(r => !r.urgent).map((r, idx) => (
@@ -605,12 +643,55 @@ function AppInner() {
 
   if (!family) return <Onboarding onComplete={data => setFamily(data)} />;
 
+  const NavIcon = ({ name, active }) => {
+    const c = active ? p.accent : p.muted;
+    const icons = {
+      today: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="3"/>
+          <line x1="16" y1="2" x2="16" y2="6"/>
+          <line x1="8" y1="2" x2="8" y2="6"/>
+          <line x1="3" y1="10" x2="21" y2="10"/>
+          <circle cx="12" cy="16" r="1.5" fill={c} stroke="none"/>
+        </svg>
+      ),
+      kids: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="9" cy="7" r="3"/>
+          <path d="M3 21v-2a5 5 0 0 1 5-5h2"/>
+          <circle cx="17" cy="10" r="2.5"/>
+          <path d="M13 21v-1.5a4 4 0 0 1 4-4 4 4 0 0 1 4 4V21"/>
+        </svg>
+      ),
+      find: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="7"/>
+          <line x1="16.5" y1="16.5" x2="22" y2="22"/>
+        </svg>
+      ),
+      share: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          <line x1="9" y1="10" x2="15" y2="10"/>
+          <line x1="12" y1="7" x2="12" y2="13"/>
+        </svg>
+      ),
+      settings: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+        </svg>
+      ),
+    };
+    return icons[name] || null;
+  };
+
   const navItems = [
-    { key: "today", icon: "📅", label: "Today" },
-    { key: "kids", icon: "👧", label: "Kids" },
-    { key: "find", icon: "🔍", label: "Find" },
-    { key: "share", icon: "💬", label: "Share" },
-    { key: "settings", icon: "⚙️", label: "Settings" },
+    { key: "today", label: "Today" },
+    { key: "kids", label: "Kids" },
+    { key: "find", label: "Find" },
+    { key: "share", label: "Share" },
+    { key: "settings", label: "More" },
   ];
 
   return (
@@ -637,7 +718,9 @@ function AppInner() {
 
         <div style={s.nav}>
           {navItems.map(({ key, label }) => (
-            <button key={key} style={{ ...s.navBtn, ...(tab===key ? s.navBtnActive : {}) }} onClick={() => setTab(key)}>{label}</button>
+            <button key={key} style={{ ...s.navBtn, ...(tab===key ? s.navBtnActive : {}) }} onClick={() => setTab(key)}>
+              {label}
+            </button>
           ))}
         </div>
 
@@ -648,13 +731,22 @@ function AppInner() {
         {tab === "settings" && <SettingsTab />}
 
         <div style={s.bottomNav}>
-          {navItems.map(b => (
-            <button key={b.key} style={s.bnavBtn} onClick={() => setTab(b.key)}>
-              <div style={{ fontSize: 20 }}>{b.icon}</div>
-              <div style={{ fontSize: 11, fontWeight: 500, color: tab===b.key ? p.accent : p.muted }}>{b.label}</div>
-              {tab === b.key && <div style={{ width: 4, height: 4, borderRadius: "50%", background: p.accent, margin: "0 auto" }} />}
-            </button>
-          ))}
+          {navItems.map(b => {
+            const active = tab === b.key;
+            return (
+              <button key={b.key} style={s.bnavBtn} onClick={() => setTab(b.key)}>
+                <div style={{
+                  width: 44, height: 34, display: "flex", alignItems: "center", justifyContent: "center",
+                  borderRadius: 12,
+                  background: active ? p.accentLight : "transparent",
+                  transition: "background 0.15s",
+                }}>
+                  <NavIcon name={b.key} active={active} />
+                </div>
+                <div style={{ fontSize: 11, fontWeight: active ? 600 : 500, color: active ? p.accent : p.muted, marginTop: 1 }}>{b.label}</div>
+              </button>
+            );
+          })}
         </div>
       </div>
     </>
@@ -716,7 +808,7 @@ const s = {
   chip2: { background: "#F5EDE0", borderRadius: 20, padding: "7px 14px", fontSize: 14, color: "#2A1F1A", cursor: "pointer", border: "1px solid transparent" },
   chip2Active: { background: "#F2C4A8", borderColor: "#E8825A", color: "#E8825A", fontWeight: 600 },
   textArea: { width: "100%", background: "#FDF8F3", border: "1.5px solid #F5EDE0", borderRadius: 12, padding: "12px", fontSize: 15, color: "#2A1F1A", outline: "none", lineHeight: 1.6, marginBottom: 10, marginTop: 8 },
-  bottomNav: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: "#fff", borderTop: "1px solid #F5EDE0", display: "flex", padding: "10px 0 24px" },
+  bottomNav: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: "rgba(255,255,255,0.95)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", borderTop: "1px solid rgba(245,237,224,0.8)", display: "flex", padding: "8px 8px 24px" },
   bnavBtn: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, border: "none", background: "none", cursor: "pointer" },
   whoBadge: { display: "inline-flex", alignItems: "center", gap: 5, background: "#F5EDE0", borderRadius: 20, padding: "4px 10px", fontSize: 13, fontWeight: 500, color: "#2A1F1A", marginTop: 6 },
 };
