@@ -207,6 +207,14 @@ function PersonPicker({ label, value, onChange, people }) {
   );
 }
 
+// Produce a local-timezone ISO string (avoids UTC shifting the date by a day)
+function localISO(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}T00:00:00`;
+}
+
 // ─── Day picker: week strip + calendar + all-day + multi-day + repeat ────────
 function isoToLocal(v) {
   if (!v) return null;
@@ -302,7 +310,7 @@ function DayPicker({ value, endValue, allDay, repeatWeekly, repeatUntil,
           sameDay(d, selStart),
           isInRange(d),
           false,
-          () => onChange(d.toISOString())
+          () => onChange(localISO(d))
         ))}
       </div>
       <button type="button" onClick={() => setShowCalStart(true)} style={{
@@ -327,7 +335,7 @@ function DayPicker({ value, endValue, allDay, repeatWeekly, repeatUntil,
               sameDay(d, selEnd),
               isInRange(d),
               true,
-              () => onEndChange(d.toISOString())
+              () => onEndChange(localISO(d))
             ))}
           </div>
           <button type="button" onClick={() => setShowCalEnd(true)} style={{
@@ -358,7 +366,7 @@ function DayPicker({ value, endValue, allDay, repeatWeekly, repeatUntil,
               sameDay(d, selRepeat),
               false,
               true,
-              () => onRepeatUntilChange(d.toISOString())
+              () => onRepeatUntilChange(localISO(d))
             ))}
           </div>
           <button type="button" onClick={() => setShowCalRepeat(true)} style={{
@@ -464,7 +472,7 @@ export default function EventEditor({ event, people, onSave, onDelete, onClose, 
   const isNew = !event;
   const [form, setForm] = useState(event || {
     id: uid(), emoji: "📅", title: "", sub: "",
-    time: "", day: new Date().toISOString(),
+    time: "", day: localISO(new Date()),
     endDay: "", allDay: false,
     repeatWeekly: false, repeatUntil: "",
     dropoffBy: "", dropoffTime: "",

@@ -23,33 +23,37 @@ const smsLink = (phone, body) => {
   return `sms:${clean}${sep}body=${encodeURIComponent(body)}`;
 };
 
-// Check if an event (including repeating ones) occurs on a given date
+// Parse an ISO date string into local midnight (avoids UTC timezone shift)
+function parseLocalDate(iso) {
+  if (!iso) return null;
+  // If it's a full ISO with time (e.g. "2026-03-02T08:00:00.000Z"),
+  // parse it but normalise to local midnight to avoid off-by-one day
+  const d = new Date(iso);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+// Check if an event (including repeating/multi-day ones) occurs on a given date
 function eventOccursOn(event, date) {
   if (!event.day) return false;
-  const start = new Date(event.day);
-  const check = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const check    = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const startDay = parseLocalDate(event.day);
+  if (!startDay) return false;
 
   if (event.repeatWeekly) {
-    // Must be same day of week, on or after start
     if (check < startDay) return false;
     if (event.repeatUntil) {
-      const until = new Date(event.repeatUntil);
-      const untilDay = new Date(until.getFullYear(), until.getMonth(), until.getDate());
-      if (check > untilDay) return false;
+      const untilDay = parseLocalDate(event.repeatUntil);
+      if (untilDay && check > untilDay) return false;
     }
-    // Same day of week?
-    return start.getDay() === date.getDay();
+    return startDay.getDay() === check.getDay();
   }
 
   if (event.endDay) {
-    // Multi-day: occurs on any day in the range
-    const end = new Date(event.endDay);
-    const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    const endDay = parseLocalDate(event.endDay);
+    if (!endDay) return check.getTime() === startDay.getTime();
     return check >= startDay && check <= endDay;
   }
 
-  // Single day: exact match
   return check.getTime() === startDay.getTime();
 }
 
@@ -176,17 +180,13 @@ function TodayTab() {
     "🏥": "#FFE0D6", "📅": p.warm,
   };
 
-  // Build this week Mon–Sun
+  // Build this week Mon–Sun (all in local midnight, no UTC shift)
   const getWeekDays = () => {
     const now = new Date();
     const dow = now.getDay(); // 0=Sun
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1));
-    monday.setHours(0,0,0,0);
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (dow === 0 ? 6 : dow - 1));
     return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      return d;
+      return new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
     });
   };
   const weekDays = getWeekDays();
