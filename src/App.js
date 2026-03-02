@@ -23,6 +23,36 @@ const smsLink = (phone, body) => {
   return `sms:${clean}${sep}body=${encodeURIComponent(body)}`;
 };
 
+// Check if an event (including repeating ones) occurs on a given date
+function eventOccursOn(event, date) {
+  if (!event.day) return false;
+  const start = new Date(event.day);
+  const check = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+
+  if (event.repeatWeekly) {
+    // Must be same day of week, on or after start
+    if (check < startDay) return false;
+    if (event.repeatUntil) {
+      const until = new Date(event.repeatUntil);
+      const untilDay = new Date(until.getFullYear(), until.getMonth(), until.getDate());
+      if (check > untilDay) return false;
+    }
+    // Same day of week?
+    return start.getDay() === date.getDay();
+  }
+
+  if (event.endDay) {
+    // Multi-day: occurs on any day in the range
+    const end = new Date(event.endDay);
+    const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    return check >= startDay && check <= endDay;
+  }
+
+  // Single day: exact match
+  return check.getTime() === startDay.getTime();
+}
+
 // Format an ISO date string or named day for display
 function formatDay(val, endVal, allDay) {
   if (!val) return "";
@@ -131,7 +161,10 @@ function TodayTab() {
     setTimeout(() => setSendDone(false), 3000);
   };
 
-  const schedule = (family.schedule || []).filter(e => !e.isReminder && !e.archived);
+  const todayDate = new Date();
+  const schedule = (family.schedule || []).filter(e =>
+    !e.isReminder && !e.archived && eventOccursOn(e, todayDate)
+  );
   const reminders = (family.reminders || []).filter(r => !r.archived);
   const archivedEvents = (family.schedule || []).filter(e => !e.isReminder && e.archived);
   const archivedReminders = (family.reminders || []).filter(r => r.archived);
