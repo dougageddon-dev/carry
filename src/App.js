@@ -176,10 +176,77 @@ function TodayTab() {
     "🏥": "#FFE0D6", "📅": p.warm,
   };
 
-  return (
-    <div style={{ padding: "20px 16px 100px" }}>
-      <div style={s.dateBadge}>{today}</div>
+  // Build this week Mon–Sun
+  const getWeekDays = () => {
+    const now = new Date();
+    const dow = now.getDay(); // 0=Sun
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1));
+    monday.setHours(0,0,0,0);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      return d;
+    });
+  };
+  const weekDays = getWeekDays();
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0,0,0,0);
+  const allEvents = (family.schedule || []).filter(e => !e.isReminder && !e.archived);
 
+  const weekLabel = (() => {
+    const start = weekDays[0];
+    const end = weekDays[6];
+    const mo = start.toLocaleDateString("en-US", { month: "short" });
+    const mo2 = end.toLocaleDateString("en-US", { month: "short" });
+    return `${mo} ${start.getDate()} – ${mo === mo2 ? "" : mo2 + " "}${end.getDate()}, ${end.getFullYear()}`;
+  })();
+
+  const EventCard = ({ item, hintDelay = 0 }) => {
+    const bg = emojiColors[item.emoji] || p.warm;
+    return (
+      <SwipeableCard
+        key={item.id}
+        hintDelay={hintDelay}
+        onDelete={() => archiveEvent(item.id)}
+        onTap={() => { setEditingEvent(item); setShowEventEditor(true); }}
+        style={s.card}
+      >
+        <div style={s.cardRow}>
+          <div style={{ ...s.timeDot, background: bg }}>{item.emoji}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={s.cardTitle}>{item.title}</div>
+            {item.sub && <div style={s.cardSub}>{item.sub}</div>}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+              {item.allDay && <span style={{ ...s.tag, background: "#EBF4FF", color: p.blue }}>☀️ All day</span>}
+              {item.repeatWeekly && <span style={{ ...s.tag, background: "#F0EBFF", color: "#6A3ABF" }}>🔁 Weekly</span>}
+              {item.dropoffBy && <span style={{ ...s.tag, background: "#FFF0E8", color: "#B05A2A" }}>🚗 {item.dropoffBy}{item.dropoffTime ? ` · ${fmt(item.dropoffTime)}` : ""}</span>}
+              {item.pickupBy && <span style={{ ...s.tag, background: "#EBF2FA", color: "#2A5080" }}>🏁 {item.pickupBy}{item.pickupTime ? ` · ${fmt(item.pickupTime)}` : ""}</span>}
+            </div>
+          </div>
+          {item.dropoffTime && !item.allDay && (
+            <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 8 }}>
+              <div style={s.cardTime}>{fmt(item.dropoffTime)}</div>
+            </div>
+          )}
+        </div>
+      </SwipeableCard>
+    );
+  };
+
+  return (
+    <div style={{ padding: "16px 16px 100px" }}>
+
+      {/* Week header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div>
+          <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700, color: p.text }}>This week</div>
+          <div style={{ fontSize: 13, color: p.muted, marginTop: 2 }}>{weekLabel}</div>
+        </div>
+        <button onClick={() => { setEditingEvent(null); setShowEventEditor(true); }} style={s.addBtn}>+ Add event</button>
+      </div>
+
+      {/* Urgent reminders */}
       {reminders.filter(r => r.urgent).map(r => (
         <div key={r.id} style={s.urgentStrip} onClick={() => { setEditingReminder({ ...r, isReminder: true }); setShowReminderEditor(true); }}>
           <div style={{ fontSize: 26 }}>{r.emoji || "⚡"}</div>
@@ -191,14 +258,15 @@ function TodayTab() {
         </div>
       ))}
 
+      {/* Send strip */}
       {family.coParent.name && (
         <div style={s.sendStrip}>
           <div style={{ fontSize: 22 }}>📱</div>
           <div style={{ flex: 1 }}>
             <strong style={{ display: "block", fontSize: 14, fontWeight: 600, color: p.green, marginBottom: 1 }}>
-              Ready to send to {family.coParent.name}
+              Send to {family.coParent.name}
             </strong>
-            <span style={{ fontSize: 13, color: p.text }}>Today's schedule · {schedule.length} items</span>
+            <span style={{ fontSize: 13, color: p.text }}>This week's schedule</span>
           </div>
           <button style={s.sendBtn} onClick={handleSend} disabled={sendLoading}>
             {sendDone ? "✓ Done!" : sendLoading ? "…" : "Send"}
@@ -206,74 +274,60 @@ function TodayTab() {
         </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 24, marginBottom: 12 }}>
-        <div style={s.sectionLabel}>Today's Schedule</div>
-        <button onClick={() => { setEditingEvent(null); setShowEventEditor(true); }} style={s.addBtn}>+ Add event</button>
-      </div>
+      {/* Week day rows */}
+      {weekDays.map((day, dayIdx) => {
+        const isToday = day.getTime() === todayMidnight.getTime();
+        const isPast = day < todayMidnight;
+        const dayEvents = allEvents.filter(e => eventOccursOn(e, day));
+        const dayName = day.toLocaleDateString("en-US", { weekday: "long" });
+        const dayShort = day.toLocaleDateString("en-US", { weekday: "short" });
+        const dayNum = day.getDate();
+        const monthShort = day.toLocaleDateString("en-US", { month: "short" });
 
-      {schedule.length === 0 && (
-        <div style={s.emptyState}>
-          <div style={{ fontSize: 36, marginBottom: 10 }}>📅</div>
-          <div style={{ fontSize: 16, color: p.muted, marginBottom: 14 }}>No events yet</div>
-          <button onClick={() => { setEditingEvent(null); setShowEventEditor(true); }} style={{ ...s.sendBtn, padding: "10px 24px", borderRadius: 20 }}>Add your first event</button>
-        </div>
-      )}
-
-      {schedule.map((item, idx) => {
-        const bg = emojiColors[item.emoji] || p.warm;
-        // Hint the first card periodically so users discover swipe-to-delete
-        const hintDelay = idx === 0 && schedule.length > 0 ? 2000 : 0;
         return (
-          <SwipeableCard
-            key={item.id}
-            hintDelay={hintDelay}
-            onDelete={() => archiveEvent(item.id)}
-            onTap={() => { setEditingEvent(item); setShowEventEditor(true); }}
-            style={s.card}
-          >
-            <div style={s.cardRow}>
-              <div style={{ ...s.timeDot, background: bg }}>{item.emoji}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={s.cardTitle}>{item.title}</div>
-                {item.sub && <div style={s.cardSub}>{item.sub}</div>}
-                {item.day && (
-                  <div style={{ marginTop: 5, marginBottom: 4, display: "flex", flexWrap: "wrap", gap: 5 }}>
-                    <span style={{
-                      display: "inline-flex", alignItems: "center", gap: 5,
-                      background: item.allDay ? "#EBF4FF" : p.accentLight,
-                      color: item.allDay ? p.blue : p.accent,
-                      borderRadius: 8, padding: "4px 10px",
-                      fontSize: 14, fontWeight: 700,
-                    }}>
-                      {item.allDay ? "☀️" : "📅"} {formatDay(item.day, item.endDay, item.allDay)}
-                      {item.allDay && " · All day"}
-                    </span>
-                    {item.repeatWeekly && (
-                      <span style={{
-                        display: "inline-flex", alignItems: "center", gap: 4,
-                        background: "#F0EBFF", color: "#6A3ABF",
-                        borderRadius: 8, padding: "4px 10px",
-                        fontSize: 13, fontWeight: 600,
-                      }}>
-                        🔁 Weekly{item.repeatUntil ? ` until ${formatDay(item.repeatUntil)}` : ""}
-                      </span>
-                    )}
-                  </div>
-                )}
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
-                  {item.dropoffBy && <span style={{ ...s.tag, background: "#FFF0E8", color: "#B05A2A" }}>Drop: {item.dropoffBy}{item.dropoffTime ? ` · ${fmt(item.dropoffTime)}` : ""}</span>}
-                  {item.pickupBy && <span style={{ ...s.tag, background: "#EBF2FA", color: "#2A5080" }}>Pick up: {item.pickupBy}{item.pickupTime ? ` · ${fmt(item.pickupTime)}` : ""}</span>}
+          <div key={dayIdx} style={{ marginBottom: 6 }}>
+            {/* Day header */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: 12,
+              padding: "10px 4px 8px",
+              borderTop: dayIdx === 0 ? "none" : `1px solid ${p.warm}`,
+              opacity: isPast && !isToday ? 0.5 : 1,
+            }}>
+              {/* Date circle */}
+              <div style={{
+                width: 42, height: 42, borderRadius: "50%", flexShrink: 0,
+                background: isToday ? p.accent : "transparent",
+                border: isToday ? "none" : `1.5px solid ${isPast ? "#E0D8D0" : p.warm}`,
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: isToday ? "#fff" : isPast ? p.muted : p.text, lineHeight: 1 }}>{dayNum}</div>
+                <div style={{ fontSize: 9, fontWeight: 600, color: isToday ? "rgba(255,255,255,0.8)" : p.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>{monthShort}</div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: isToday ? 700 : 600, color: isToday ? p.accent : isPast ? p.muted : p.text }}>
+                  {isToday ? "Today — " : ""}{dayName}
                 </div>
+                {dayEvents.length === 0 && (
+                  <div style={{ fontSize: 12, color: "#C0B8B0", marginTop: 1 }}>No events</div>
+                )}
               </div>
-              <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 8 }}>
-                {item.time && <div style={s.cardTime}>{fmt(item.time)}</div>}
-              </div>
+              {dayEvents.length > 0 && (
+                <div style={{ background: isToday ? p.accentLight : p.warm, borderRadius: 100, padding: "3px 10px", fontSize: 12, fontWeight: 700, color: isToday ? p.accent : p.muted }}>
+                  {dayEvents.length}
+                </div>
+              )}
             </div>
-          </SwipeableCard>
+
+            {/* Events for this day */}
+            {dayEvents.map((item, idx) => (
+              <EventCard key={item.id} item={item} hintDelay={isToday && idx === 0 ? 2500 : 0} />
+            ))}
+          </div>
         );
       })}
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 24, marginBottom: 12 }}>
+      {/* Reminders section */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20, marginBottom: 12, paddingTop: 16, borderTop: `1px solid ${p.warm}` }}>
         <div style={s.sectionLabel}>Reminders</div>
         <button onClick={() => { setEditingReminder(null); setShowReminderEditor(true); }} style={s.addBtn}>+ Add reminder</button>
       </div>
@@ -720,7 +774,7 @@ function AppInner() {
   };
 
   const navItems = [
-    { key: "today", label: "Today" },
+    { key: "today", label: "Week" },
     { key: "kids", label: "Kids" },
     { key: "find", label: "Find" },
     { key: "share", label: "Share" },
